@@ -96,7 +96,7 @@ The CO₂/day estimate uses the 0.000000006 kWh/byte coefficient from Aslan et a
 
 | Layer | Supported |
 |---|---|
-| Frontend | TypeScript, JavaScript (React, Vue, fetch/axios) |
+| Frontend | TypeScript (React, Vue, fetch/axios) |
 | Backend | Python (FastAPI, Flask), Node.js (Express), Java (Spring Boot) |
 | API style | REST / JSON |
 | Workspace | VS Code monorepo or multi-root workspace |
@@ -132,7 +132,7 @@ Tasks are designed to be independently developable against shared interfaces def
 - URL normalization and canonical endpoint registry
 - Integration glue between all components
 
-### Person B — TypeScript/JavaScript AST Parser
+### Person B — TypeScript AST Parser
 - Field extraction from frontend request bodies (fetch, axios, form objects)
 - Usage tracking in frontend: destructuring, JSX, optional chaining, template literals
 - Uses `ts-morph` for full TS compiler API access
