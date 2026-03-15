@@ -117,85 +117,6 @@ CO₂ coefficient from Aslan et al. (2018), surfaced transparently as an estimat
 | API Style | REST / JSON |
 
 
-# Real-World Evaluation
-
-GreenField has been run against a public open-source repository to validate detection and surface limitations.
-
-## Scan 1 — Mattermost
-
-A large-scale production TypeScript codebase: React + Redux frontend, Go backend. The entire frontend HTTP surface is defined in a single 4,943-line file (`webapp/platform/client/src/client4.ts`) that wraps all requests through a custom `doFetch()` helper.
-
-**Scanned: `webapp/platform/client/src/` + `webapp/channels/src/packages/mattermost-redux/src/actions/`**
-
-| Metric | Value |
-|---|---|
-| `client4.ts` lines of code | 4,943 |
-| Total API endpoints (`doFetch` calls) | 500 |
-| Total POST/PUT/PATCH request bodies | 190 |
-| — Inline object literals | 58 (31%) |
-| — Variable references | 132 (69%) |
-| Redux action files scanned | 35 |
-| **Endpoints detected by GreenField** | 241 |
-| **Request body fields extracted** | 148 (68 unique) |
-| Unique field names in tracked set | 631 (filtered) |
-
-
-```
-roles, current_password, new_password, token, email, active,
-termsOfServiceId, accepted, login_id, password, deviceId, device_id,
-session_id, term, channel_id, current_service, new_service, mfa_code,
-ldap_id, client_id, response_type, redirect_uri, state, scope ...
-```
-
-Sample endpoints detected (POST):
-
-```
-POST /api/v4/users/:param/password
-POST /api/v4/users/password/reset
-POST /api/v4/users/login
-POST /api/v4/channels/:param/members
-POST /api/v4/teams/:param/invite/email
-POST /api/v4/actions/dialogs/submit
-```
-
-**Usage tracker signal:** The usage tracker now tracks 631 unique field names across the 35 action files (down from 1,060 before noise filtering). The filtered set contains real API field names: `display_name`, `team_id`, `notify_props`, `last_viewed_at_times`, `total_msg_count`, `mention_count`, `mark_unread`, `file_ids`, `create_at`, `user_id`, `channel_ids`, `status_code` — the kind of names the diff engine needs to correctly classify fields as used or dead. JS builtins, Redux action type constants (ALL_CAPS), and DOM/HTTP internals are now excluded.
-
-**Key takeaway:** Three implementation improvements unlocked Mattermost — adding `doFetch` wrapper support to the endpoint mapper and field extractor (241 endpoints, 148 fields), single-hop variable reference tracing (additional 50 field occurrences from `const body = {...}` patterns), and a noise filter on the usage tracker (40% reduction in tracked names). The remaining 132 variable-reference bodies (`JSON.stringify(user)`, `JSON.stringify(team)`) pass typed interface parameters — these require type-aware tracing and are the next planned improvement.
-
-
-# Test Suite
-
-```bash
-npm install
-npm test        # compiles + runs 46 tests
-```
-
-**46 tests, all passing.**
-
-| Suite | Tests | What it covers |
-|---|---|---|
-| `fieldExtractor` | 13 | axios bodies, fetch+JSON.stringify, side tagging, location tracking, no double-counting |
-| `usageTracker` | 17 | direct access, optional chaining, destructuring, aliased keys, nested destructuring, JSX/template literals, dynamic key exclusion, no-duplicates |
-| `integration` | 16 | endpoint mapper, field extractor on real fixtures, usage tracker, end-to-end dead field detection |
-
-```
-test/
- ├ __mocks__/vscode.ts              # VS Code API mock for headless runs
- └ suite/
-     ├ fieldExtractor.test.ts
-     ├ usageTracker.test.ts
-     ├ integration.test.ts
-     └ fixtures/
-         ├ unit/
-         │   ├ axiosPost.ts         # axios.post with 4 body fields
-         │   ├ fetchPost.ts         # fetch + JSON.stringify with 4 body fields
-         │   └ usagePatterns.ts     # all access patterns inc. aliased destructuring
-         └ integration/
-             ├ frontend/orders.ts   # frontend calling /api/orders
-             └ backend/orders.ts    # Express backend for /api/orders
-```
-
-
 # Repository Structure
 
 ```
@@ -305,4 +226,59 @@ npm run compile   # compile extension
 npm test          # compile + run test suite
 npm run watch     # incremental compile on save
 F5                # launch Extension Development Host
+```
+
+# Real-World Evaluation
+
+GreenField has been run against a public open-source repository to validate detection and surface limitations.
+
+## Scan 1 — Mattermost
+
+A large-scale production TypeScript codebase: React + Redux frontend, Go backend. The entire frontend HTTP surface is defined in a single 4,943-line file (`webapp/platform/client/src/client4.ts`) that wraps all requests through a custom `doFetch()` helper.
+
+**Scanned: `webapp/platform/client/src/` + `webapp/channels/src/packages/mattermost-redux/src/actions/`**
+
+| Metric | Value |
+|---|---|
+| `client4.ts` lines of code | 4,943 |
+| Total API endpoints (`doFetch` calls) | 500 |
+| Total POST/PUT/PATCH request bodies | 190 |
+| — Inline object literals | 58 (31%) |
+| — Variable references | 132 (69%) |
+| Redux action files scanned | 35 |
+| **Endpoints detected by GreenField** | 241 |
+| **Request body fields extracted** | 148 (68 unique) |
+| Unique field names in tracked set | 631 (filtered) |
+
+
+```
+roles, current_password, new_password, token, email, active,
+termsOfServiceId, accepted, login_id, password, deviceId, device_id,
+session_id, term, channel_id, current_service, new_service, mfa_code,
+ldap_id, client_id, response_type, redirect_uri, state, scope ...
+```
+
+Sample endpoints detected (POST):
+
+```
+POST /api/v4/users/:param/password
+POST /api/v4/users/password/reset
+POST /api/v4/users/login
+POST /api/v4/channels/:param/members
+POST /api/v4/teams/:param/invite/email
+POST /api/v4/actions/dialogs/submit
+```
+
+**Usage tracker signal:** The usage tracker now tracks 631 unique field names across the 35 action files (down from 1,060 before noise filtering). The filtered set contains real API field names: `display_name`, `team_id`, `notify_props`, `last_viewed_at_times`, `total_msg_count`, `mention_count`, `mark_unread`, `file_ids`, `create_at`, `user_id`, `channel_ids`, `status_code` — the kind of names the diff engine needs to correctly classify fields as used or dead. JS builtins, Redux action type constants (ALL_CAPS), and DOM/HTTP internals are now excluded.
+
+**Key takeaway:** Three implementation improvements unlocked Mattermost — adding `doFetch` wrapper support to the endpoint mapper and field extractor (241 endpoints, 148 fields), single-hop variable reference tracing (additional 50 field occurrences from `const body = {...}` patterns), and a noise filter on the usage tracker (40% reduction in tracked names). The remaining 132 variable-reference bodies (`JSON.stringify(user)`, `JSON.stringify(team)`) pass typed interface parameters — these require type-aware tracing and are the next planned improvement.
+
+### To replicate:
+
+```bash
+git clone https://github.com/mattermost/mattermost.git
+```
+
+```bash
+node scripts/scan.js /path_to_cloned_mattermost_repo
 ```
