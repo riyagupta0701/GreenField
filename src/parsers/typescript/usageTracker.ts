@@ -88,10 +88,12 @@ function isApiFieldCandidate(name: string): boolean {
   return true;
 }
 
-export function trackUsage(filePath: string): Field[] {
-  const project = new Project({ skipLoadingLibFiles: true } as any);
-  project.addSourceFileAtPath(filePath);
-  const sourceFile = project.getSourceFileOrThrow(filePath);
+export function trackUsage(filePath: string, project?: Project): Field[] {
+  const proj = project ?? new Project({ skipLoadingLibFiles: true } as any);
+  if (!proj.getSourceFile(filePath)) {
+    proj.addSourceFileAtPath(filePath);
+  }
+  const sourceFile = proj.getSourceFileOrThrow(filePath);
 
   const seen = new Set<string>();
   const fields: Field[] = [];

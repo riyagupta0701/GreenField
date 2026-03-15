@@ -83,31 +83,30 @@ function extractFromOptionsObject(
 
   const arg = innerArgs[0];
 
-  // Case A: inline object literal — JSON.stringify({ field1, field2 })
+  // Case A: inline object literal
   if (arg.getKind() === SyntaxKind.ObjectLiteralExpression) {
     return collectObjectFields(
       arg.asKindOrThrow(SyntaxKind.ObjectLiteralExpression),
-      filePath,
-      'request'
+      filePath, 'request'
     );
   }
 
-  // Case B: variable reference — JSON.stringify(bodyVar)
-  // Attempt single-hop resolution to the variable's initialiser
+  // Case B: single-hop variable reference
   if (arg.getKind() === SyntaxKind.Identifier) {
     const obj = resolveToObjectLiteral(arg.asKindOrThrow(SyntaxKind.Identifier));
-    if (obj) {
-      return collectObjectFields(obj, filePath, 'request');
-    }
+    if (obj) return collectObjectFields(obj, filePath, 'request');
   }
 
   return [];
 }
 
-export function extractFields(filePath: string): Field[] {
-  const project = new Project({ skipLoadingLibFiles: true } as any);
-  project.addSourceFileAtPath(filePath);
-  const sourceFile = project.getSourceFileOrThrow(filePath);
+// Extract request body fields from a TypeScript/JavaScript source file.
+export function extractFields(filePath: string, project?: Project): Field[] {
+  const proj = project ?? new Project({ skipLoadingLibFiles: true } as any);
+  if (!proj.getSourceFile(filePath)) {
+    proj.addSourceFileAtPath(filePath);
+  }
+  const sourceFile = proj.getSourceFileOrThrow(filePath);
   const fields: Field[] = [];
 
   sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).forEach(call => {
@@ -126,11 +125,8 @@ export function extractFields(filePath: string): Field[] {
 
     // ── Rule 2: any call with { method: 'post'|..., body: JSON.stringify(X) }
     //           covers fetch(), this.doFetch(), this.doFetchWithResponse(), etc.
-    //           resolves both inline literals and single-hop variable references
     const extracted = extractFromOptionsObject(call, filePath);
-    if (extracted.length > 0) {
-      fields.push(...extracted);
-    }
+    if (extracted.length > 0) fields.push(...extracted);
 
     // ── Rule 3: standalone JSON.stringify({ ... }) not inside a body: property
     if (expr === 'JSON.stringify') {

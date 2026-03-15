@@ -36,17 +36,23 @@ function resolveTemplateLiteralUrl(templateText: string): string | null {
   const base = ROUTE_HELPER_MAP[helperName];
   if (!base) return null;
 
-  const full = base + suffix;
-  return normalizeUrl(full);
+  return normalizeUrl(base + suffix);
+}
+
+function extractMethodFromOptions(optionsText: string): string {
+  const methodMatch = optionsText.match(/\bmethod\s*:\s*['"`](\w+)['"`]/);
+  return methodMatch ? methodMatch[1].toUpperCase() : 'GET';
 }
 
 export function detectFrontendEndpoints(code: string) {
 
   const endpoints = []
 
-  const fetchRegex = /fetch\(['"`](.*?)['"`]/g
+  const fetchRegex = /fetch\(['"`](.*?)['"`](?:\s*,\s*(\{[\s\S]*?\}))?\s*\)/g
   for (const match of code.matchAll(fetchRegex)) {
-    endpoints.push({ method: "GET", path: normalizeUrl(match[1]) })
+    const path = normalizeUrl(match[1])
+    const method = match[2] ? extractMethodFromOptions(match[2]) : 'GET'
+    endpoints.push({ method, path })
   }
 
   const axiosRegex = /axios\.(get|post|put|delete|patch)\(['"`](.*?)['"`]/g
@@ -54,10 +60,11 @@ export function detectFrontendEndpoints(code: string) {
     endpoints.push({ method: match[1].toUpperCase(), path: normalizeUrl(match[2]) })
   }
 
-  const doFetchRegex = /this\.doFetch(?:WithResponse)?(?:<[^>]+>)?\(\s*([\s\S]*?),\s*\{method:\s*['"`](\w+)['"`]/g
+  const doFetchRegex = /this\.doFetch(?:WithResponse)?(?:<[^>]+>)?\(\s*([\s\S]*?),\s*(\{[\s\S]*?\})\s*\)/g
   for (const match of code.matchAll(doFetchRegex)) {
-    const urlExpr = match[1].trim()
-    const method  = match[2].toUpperCase()
+    const urlExpr     = match[1].trim()
+    const optionsText = match[2]
+    const method      = extractMethodFromOptions(optionsText)
 
     const plainStr = urlExpr.match(/^['"]([^'"]+)['"]$/)
     if (plainStr) {
