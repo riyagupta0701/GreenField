@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020"],
+    "outDir": "dist-test",
+    "rootDir": ".",
+    "strict": false,
+    "sourceMap": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "vscode": ["./test/__mocks__/vscode.ts"]
+    }
+  },
+  "include": ["src", "test"]
+}

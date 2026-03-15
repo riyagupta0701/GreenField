@@ -58,11 +58,22 @@
   "scripts": {
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test": "tsc -p tsconfig.test.json && mocha 'dist-test/test/suite/**/*.test.js' --timeout 10000"
+  },
+  "dependencies": {
+    "ts-morph": "^27.0.2"
   },
   "devDependencies": {
+    "@types/axios": "^0.9.36",
+    "@types/express": "^5.0.6",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^20.12.12",
     "@types/vscode": "^1.110.0",
+    "axios": "^1.13.6",
+    "express": "^5.2.1",
+    "mocha": "^11.7.5",
+    "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   }
 }

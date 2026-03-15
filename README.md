@@ -2,9 +2,8 @@
 
 **GreenField** is a VS Code extension that detects **unused JSON fields between frontend and backend codebases**, highlighting wasted network payload and unnecessary serialization work.
 
-By statically analyzing API calls and route handlers across a project, GreenField identifies fields that are transmitted but never used, helping developers improve **efficiency, sustainability, and maintainability**.
+By statically analysing API calls and route handlers across a project, GreenField identifies fields that are transmitted but never used, helping developers improve **efficiency, sustainability, and maintainability**.
 
----
 
 # Motivation
 
@@ -21,24 +20,8 @@ Example:
 }
 ```
 
-If the frontend only reads:
+If the frontend only reads `name` and `email`, then `id` and `lastLoginIp` are **dead fields**. These cause unnecessary bandwidth usage, additional CPU parsing overhead, and wasted energy in large-scale systems. GreenField detects these automatically.
 
-```
-name
-email
-```
-
-then `id` and `lastLoginIp` are **dead fields**.
-
-These unused fields cause:
-
-* unnecessary bandwidth usage
-* additional CPU parsing overhead
-* wasted energy in large-scale systems
-
-GreenField detects these automatically.
-
----
 
 # Architecture
 
@@ -60,41 +43,18 @@ Sustainability Scorer
 VS Code Diagnostics
 ```
 
----
 
 # Core Components
 
 ## 1. Endpoint Mapper
 
-Builds a **canonical registry of API endpoints** by analyzing both frontend and backend code.
+Builds a **canonical registry of API endpoints** by analysing both frontend and backend code.
 
-### Frontend detection
+**Frontend detection** — detects `fetch`, `axios.get/post/put/delete`, `doFetch` calls and extracts the URL.
 
-Detects calls such as:
+**Backend detection** — detects Express `app.get/post/put/delete`, Flask `@app.route`, and Spring `@GetMapping/@PostMapping` and extracts the route pattern.
 
-```
-fetch("/api/users/123")
-
-axios.get("/api/orders")
-
-axios.post("/api/products")
-```
-
-### Backend detection
-
-Detects routes such as:
-
-```
-app.get("/api/users/:id")
-
-app.get("/api/orders")
-
-app.post("/api/products")
-```
-
-### URL normalization
-
-Different parameter syntaxes are normalized:
+**URL normalization:**
 
 | Input              | Normalized          |
 | ------------------ | ------------------- |
@@ -103,260 +63,246 @@ Different parameter syntaxes are normalized:
 | `/api/users/<id>`  | `/api/users/:param` |
 | `/api/users/${id}` | `/api/users/:param` |
 
-Resulting canonical endpoint:
 
-```
-GET /api/users/:param
-```
+## 2. Field Extractor (TypeScript)
 
----
+Uses `ts-morph` to extract fields from frontend request bodies. Detects inline object literals in:
 
-## 2. Field Extractor
+```ts
+axios.post('/api/users', { username, email, password })
 
-Extracts fields defined in:
-
-* backend JSON responses
-* frontend request bodies
-
-Example backend:
-
-```js
-res.json({
-  name: "Alice",
-  email: "alice@test.com",
-  lastLoginIp: "192.168.1.10"
+fetch('/api/orders', {
+  method: 'POST',
+  body: JSON.stringify({ customerId, items, notes })
 })
 ```
 
----
+## 3. Usage Tracker (TypeScript)
 
-## 3. Usage Tracker
+Uses `ts-morph` to detect which response fields the frontend actually reads. Covers all access patterns:
 
-Detects which fields the frontend actually reads:
-
+```ts
+response.id                          // direct property access
+response.user?.name                  // optional chaining
+const { email, role } = response     // destructuring
+const { createdAt: joinedAt } = res  // aliased destructuring → tracks "createdAt"
+const { address: { city } } = res    // nested destructuring
+`Hello ${user.firstName}`            // template literals
+<p>{user.displayName}</p>            // JSX
 ```
-user.name
-user.email
-```
-
-Supports:
-
-* property access
-* destructuring
-* optional chaining
-* JSX usage
-
----
 
 ## 4. Diff Engine
-
-Computes unused fields.
 
 ```
 dead_fields = defined_fields − accessed_fields
 ```
 
-Example:
-
-| Field       | Status |
-| ----------- | ------ |
-| name        | used   |
-| email       | used   |
-| lastLoginIp | unused |
-
----
 
 ## 5. Sustainability Scorer
 
-Each dead field receives an estimated waste score:
+```
+waste = avg_field_size × request_volume
+CO₂/day = wasted_bytes × request_volume × 0.000000006 kWh/byte
+```
+
+CO₂ coefficient from Aslan et al. (2018), surfaced transparently as an estimate.
+
+# Supported Stack
+
+| Layer | Support |
+|---|---|---|
+| Frontend | TypeScript / JavaScript |
+| Backend | Node.js (Express) |
+| HTTP clients | fetch / axios / doFetch |
+| API Style | REST / JSON |
+
+
+# Real-World Evaluation
+
+GreenField has been run against a public open-source repository to validate detection and surface limitations.
+
+## Scan 1 — Mattermost
+
+A large-scale production TypeScript codebase: React + Redux frontend, Go backend. The entire frontend HTTP surface is defined in a single 4,943-line file (`webapp/platform/client/src/client4.ts`) that wraps all requests through a custom `doFetch()` helper.
+
+**Scanned: `webapp/platform/client/src/` + `webapp/channels/src/packages/mattermost-redux/src/actions/`**
+
+| Metric | Value |
+|---|---|
+| `client4.ts` lines of code | 4,943 |
+| Total API endpoints (`doFetch` calls) | 500 |
+| Total POST/PUT/PATCH request bodies | 190 |
+| — Inline object literals | 58 (31%) |
+| — Variable references | 132 (69%) |
+| Redux action files scanned | 35 |
+| **Endpoints detected by GreenField** | 241 |
+| **Request body fields extracted** | 148 (68 unique) |
+| Unique field names in tracked set | 631 (filtered) |
+
 
 ```
-waste = average_field_size × request_volume
+roles, current_password, new_password, token, email, active,
+termsOfServiceId, accepted, login_id, password, deviceId, device_id,
+session_id, term, channel_id, current_service, new_service, mfa_code,
+ldap_id, client_id, response_type, redirect_uri, state, scope ...
 ```
 
-Metrics include:
+Sample endpoints detected (POST):
 
-* wasted bytes per request
-* estimated CO₂ impact
-* serialization overhead
+```
+POST /api/v4/users/:param/password
+POST /api/v4/users/password/reset
+POST /api/v4/users/login
+POST /api/v4/channels/:param/members
+POST /api/v4/teams/:param/invite/email
+POST /api/v4/actions/dialogs/submit
+```
 
----
+**Usage tracker signal:** The usage tracker now tracks 631 unique field names across the 35 action files (down from 1,060 before noise filtering). The filtered set contains real API field names: `display_name`, `team_id`, `notify_props`, `last_viewed_at_times`, `total_msg_count`, `mention_count`, `mark_unread`, `file_ids`, `create_at`, `user_id`, `channel_ids`, `status_code` — the kind of names the diff engine needs to correctly classify fields as used or dead. JS builtins, Redux action type constants (ALL_CAPS), and DOM/HTTP internals are now excluded.
 
-# Supported Stack (MVP)
+**Key takeaway:** Three implementation improvements unlocked Mattermost — adding `doFetch` wrapper support to the endpoint mapper and field extractor (241 endpoints, 148 fields), single-hop variable reference tracing (additional 50 field occurrences from `const body = {...}` patterns), and a noise filter on the usage tracker (40% reduction in tracked names). The remaining 132 variable-reference bodies (`JSON.stringify(user)`, `JSON.stringify(team)`) pass typed interface parameters — these require type-aware tracing and are the next planned improvement.
 
-| Layer      | Support                 |
-| ---------- | ----------------------- |
-| Frontend   | TypeScript / JavaScript |
-| Backend    | Node.js (Express)       |
-| Frameworks | fetch / axios           |
-| API Style  | REST / JSON             |
 
-Future support includes:
+# Test Suite
 
-* Python (FastAPI / Flask)
-* Java (Spring Boot)
+```bash
+npm install
+npm test        # compiles + runs 46 tests
+```
 
----
+**46 tests, all passing.**
+
+| Suite | Tests | What it covers |
+|---|---|---|
+| `fieldExtractor` | 13 | axios bodies, fetch+JSON.stringify, side tagging, location tracking, no double-counting |
+| `usageTracker` | 17 | direct access, optional chaining, destructuring, aliased keys, nested destructuring, JSX/template literals, dynamic key exclusion, no-duplicates |
+| `integration` | 16 | endpoint mapper, field extractor on real fixtures, usage tracker, end-to-end dead field detection |
+
+```
+test/
+ ├ __mocks__/vscode.ts              # VS Code API mock for headless runs
+ └ suite/
+     ├ fieldExtractor.test.ts
+     ├ usageTracker.test.ts
+     ├ integration.test.ts
+     └ fixtures/
+         ├ unit/
+         │   ├ axiosPost.ts         # axios.post with 4 body fields
+         │   ├ fetchPost.ts         # fetch + JSON.stringify with 4 body fields
+         │   └ usagePatterns.ts     # all access patterns inc. aliased destructuring
+         └ integration/
+             ├ frontend/orders.ts   # frontend calling /api/orders
+             └ backend/orders.ts    # Express backend for /api/orders
+```
+
 
 # Repository Structure
 
 ```
-src
- ├ endpointMapper
+src/
+ ├ endpointMapper/
  │   ├ backendDetector.ts
  │   ├ frontendDetector.ts
  │   ├ urlNormalizer.ts
  │   └ index.ts
- │
- ├ diffEngine
+ ├ diffEngine/
  │   ├ differ.ts
  │   ├ scorer.ts
- │   └ index.ts
- │
- ├ parsers
- │   ├ typescript
- │   ├ python
- │   └ java
- │
- ├ ui
+ │   └ index.t
+ ├ parsers/
+ │   ├ typescript/
+ │   │   ├ fieldExtractor.ts
+ │   │   ├ usageTracker.ts
+ │   │   └ index.t
+ │   ├ python/
+ │   └ java/
+ ├ ui/
  │   ├ diagnosticProvider.ts
  │   ├ hoverProvider.ts
  │   ├ panel.ts
  │   ├ quickFix.ts
  │   └ statusBar.ts
- │
  ├ types.ts
  └ extension.ts
+
+scripts/
+ └ scan.js    # Standalone CLI scanner (no VS Code required)
+
+test/
+ ├ __mocks__/vscode.ts
+ └ suite/     # 46 tests across 3 suites
 ```
 
----
+
+# Shared Interfaces
+
+All components communicate through `src/types.ts`:
+
+```typescript
+interface Endpoint {
+  pattern: string        // "GET /api/users/:param"
+  method: string
+  backendFile: string
+  frontendFiles: string[]
+}
+
+interface Field {
+  name: string
+  side: 'request' | 'response'
+  definedAt: string      // "path/to/file.ts:42"
+  wasteScore?: number    // bytes × request volume
+}
+
+interface FieldSet {
+  endpoint: Endpoint
+  definedFields: Field[]
+  accessedFields: Field[]
+  deadFields?: Field[]
+}
+```
+
 
 # Installation
 
-Clone the repository:
-
-```
+```bash
 git clone <repo-url>
-cd greenfield
-```
-
-Install dependencies:
-
-```
+cd GreenField
 npm install
-```
-
-Compile the extension:
-
-```
 npm run compile
 ```
 
----
 
 # Running the Extension
 
-Open the project in VS Code and press:
+1. Open the GreenField project folder in VS Code (`File → Open Folder → select the GreenField directory`)
 
-```
-F5
-```
+2. Press F5 — this opens a second VS Code window called the Extension Development Host
 
-This launches an **Extension Development Host**.
+3. In that second window (not the original one), open a folder that contains the project you want to scan
 
-In the new VS Code window:
+4. In that second window, open the Command Palette with `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac)
 
-1. Open a project workspace
-2. Run the command
+5. Type `GreenField: Scan Workspace` and press Enter
 
-```
-GreenField: Scan Workspace
-```
+The extension scans all `.ts/.tsx/.js/.jsx/.py/.java` files and outputs a JSON endpoint registry.
 
-The extension will analyze the project and display detected endpoints.
 
----
+# Standalone CLI Scanner
 
-# Example Test Project
+Run GreenField against any TypeScript project without VS Code:
 
-Frontend:
-
-```
-fetch(`/api/users/${userId}`)
-
-axios.get("/api/orders")
-
-axios.post("/api/products")
+```bash
+node scripts/scan.js /path/to/project/
 ```
 
-Backend:
+It prints endpoints, extracted fields, usage tracking, and dead field analysis in the terminal. 
 
-```
-app.get("/api/users/:id")
-
-app.get("/api/orders")
-
-app.post("/api/products")
-```
-
-GreenField detects:
-
-```
-GET /api/users/:param
-GET /api/orders
-POST /api/products
-```
-
----
-
-# Example Output
-
-```
-[
-  {
-    "pattern": "GET /api/users/:param",
-    "method": "GET",
-    "backendFile": "backend.ts",
-    "frontendFiles": ["frontend.ts"]
-  },
-  {
-    "pattern": "GET /api/orders",
-    "method": "GET",
-    "backendFile": "backend.ts",
-    "frontendFiles": ["frontend.ts"]
-  },
-  {
-    "pattern": "POST /api/products",
-    "method": "POST",
-    "backendFile": "backend.ts",
-    "frontendFiles": ["frontend.ts"]
-  }
-]
-```
-
----
 
 # Development Workflow
 
-1. Run TypeScript compiler
-
+```bash
+npm run compile   # compile extension
+npm test          # compile + run test suite
+npm run watch     # incremental compile on save
+F5                # launch Extension Development Host
 ```
-npm run compile
-```
-
-2. Launch extension
-
-```
-F5
-```
-
-3. Run command
-
-```
-GreenField: Scan Workspace
-```
-
----
-
-
-
