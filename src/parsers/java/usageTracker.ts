@@ -12,8 +12,9 @@ function lineOf(content: string, index: number): number {
 function dedup(fields: Field[]): Field[] {
   const seen = new Set<string>();
   return fields.filter(f => {
-    if (seen.has(f.name)) { return false; }
-    seen.add(f.name);
+    const key = `${f.name}:${f.definedAt}`;
+    if (seen.has(key)) { return false; }
+    seen.add(key);
     return true;
   });
 }
@@ -36,24 +37,33 @@ function stripGenerics(typeName: string): string {
   return typeName.replace(/<[^>]+>/, '').trim();
 }
 
-// Extract field names from a DTO class declared within the file
+// Extract field names from a DTO class declared within the file.
+// Uses brace-counting to correctly capture the full class body (avoids stopping at first '}'.
 function extractDtoFields(content: string, className: string): string[] {
-  // Find class declaration
   const classRe = new RegExp(
-    `class\\s+${className}\\s*(?:extends\\s+\\w+\\s*)?(?:implements[^{]+)?\\{([\\s\\S]*?)\\}`,
+    `class\\s+${className}\\s*(?:extends\\s+\\w+\\s*)?(?:implements[^{]+)?\\{`,
     'g'
   );
   const names: string[] = [];
   let m: RegExpExecArray | null;
   while ((m = classRe.exec(content)) !== null) {
-    const body = m[1];
-    // Match private/public/protected field declarations
+    // Brace-count to find the matching closing '}'
+    const openIndex = m.index + m[0].length - 1; // index of the opening '{'
+    let depth = 1;
+    let pos = openIndex + 1;
+    while (pos < content.length && depth > 0) {
+      if (content[pos] === '{') depth++;
+      else if (content[pos] === '}') depth--;
+      pos++;
+    }
+    const body = content.slice(openIndex + 1, pos - 1);
+
     const fieldRe = /(?:private|public|protected)\s+(?:final\s+)?[\w<>\[\],\s]+\s+([a-z][a-zA-Z0-9_]*)\s*[;=]/g;
     let fm: RegExpExecArray | null;
     while ((fm = fieldRe.exec(body)) !== null) {
       const name = fm[1];
       if (!isNoiseName(name)) {
-        // Check for @JsonProperty override
+        // Check for @JsonProperty override in the preceding annotation block
         const precedingBody = body.substring(0, fm.index);
         const annotBlockRe = /(?:@\w+(?:\([^)]*\))?\s*)*$/;
         const annotBlock = annotBlockRe.exec(precedingBody)?.[0] ?? '';

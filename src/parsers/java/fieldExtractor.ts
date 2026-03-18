@@ -13,10 +13,24 @@ function lineOf(content: string, index: number): number {
 function dedup(fields: Field[]): Field[] {
   const seen = new Set<string>();
   return fields.filter(f => {
-    if (seen.has(f.name)) { return false; }
-    seen.add(f.name);
+    const key = `${f.name}:${f.definedAt}`;
+    if (seen.has(key)) { return false; }
+    seen.add(key);
     return true;
   });
+}
+
+// Collect all class names used as @RequestBody parameters in the file.
+// These are request DTOs — their fields are handled by usageTracker, not fieldExtractor.
+function requestBodyClassNames(content: string): Set<string> {
+  const names = new Set<string>();
+  const re = /@RequestBody\s+(\w+(?:<[^>]+>)?)\s+\w+/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    // Strip generics: List<UserDto> → UserDto
+    names.add(m[1].replace(/<[^>]+>/, '').trim());
+  }
+  return names;
 }
 
 const JAVA_FIELD_NOISE = new Set([
@@ -40,33 +54,55 @@ export function extractFields(filePath: string): Field[] {
   const content = fs.readFileSync(filePath, 'utf8');
   const fields: Field[] = [];
 
-  // Pattern A: DTO class fields — optionally preceded by @JsonProperty annotation
-  // The regex captures the annotation block + access modifier + type + field name.
-  // If @JsonProperty("name") is present in the match, use its value instead of the Java identifier.
-  const fieldDeclRe = /(?:(?:@\w+(?:\([^)]*\))?\s*)*)(?:private|public|protected)\s+(?:final\s+)?[\w<>\[\],\s]+\s+([a-z][a-zA-Z0-9_]*)\s*[;=]/g;
+  // Pre-compute which class names are @RequestBody params — usageTracker owns those.
+  const reqBodyClasses = requestBodyClassNames(content);
+
+  // Pattern A: DTO class fields — only for classes NOT used as @RequestBody.
+  // We scan class bodies individually to avoid picking up request-DTO fields.
+  // For each class found in the file, skip it if its name is in reqBodyClasses.
+  const classDeclRe = /class\s+(\w+)\s*(?:extends\s+\w+\s*)?(?:implements[^{]+)?\{/g;
   const jsonPropInlineRe = /@JsonProperty\(\s*["']([a-zA-Z_][a-zA-Z0-9_]*)["']\)/;
   let m: RegExpExecArray | null;
-  while ((m = fieldDeclRe.exec(content)) !== null) {
-    const javaName = m[1];
-    if (isNoiseName(javaName)) continue;
+  while ((m = classDeclRe.exec(content)) !== null) {
+    const className = m[1];
+    if (reqBodyClasses.has(className)) continue; // request DTO — skip
 
-    // Check if the matched text includes a @JsonProperty annotation
-    const jpMatch = jsonPropInlineRe.exec(m[0]);
-    const fieldName = jpMatch ? jpMatch[1] : javaName;
-    const line = lineOf(content, m.index);
-    fields.push({ name: fieldName, side: 'response', definedAt: `${filePath}:${line}`, wasteScore: 0 });
+    // Extract the class body by counting braces from the opening {
+    const bodyStart = m.index + m[0].length;
+    let depth = 1;
+    let pos = bodyStart;
+    while (pos < content.length && depth > 0) {
+      if (content[pos] === '{') depth++;
+      else if (content[pos] === '}') depth--;
+      pos++;
+    }
+    const classBody = content.slice(bodyStart, pos - 1);
+
+    const fieldDeclRe = /(?:(?:@\w+(?:\([^)]*\))?\s*)*)(?:private|public|protected)\s+(?:final\s+)?[\w<>\[\],\s]+\s+([a-z][a-zA-Z0-9_]*)\s*[;=]/g;
+    let fm: RegExpExecArray | null;
+    while ((fm = fieldDeclRe.exec(classBody)) !== null) {
+      const javaName = fm[1];
+      if (isNoiseName(javaName)) continue;
+      const jpMatch = jsonPropInlineRe.exec(fm[0]);
+      const fieldName = jpMatch ? jpMatch[1] : javaName;
+      const absoluteIndex = bodyStart + fm.index;
+      const line = lineOf(content, absoluteIndex);
+      fields.push({ name: fieldName, side: 'response', definedAt: `${filePath}:${line}`, wasteScore: 0 });
+    }
   }
 
-  // Pattern B: Map.of("key", val, ...)
+  // Pattern B: Map.of("key", val, ...) — keys are at even positions (0, 2, 4, ...)
   const mapOfRe = /Map\.of\(([^)]+)\)/gs;
   while ((m = mapOfRe.exec(content)) !== null) {
     const inner = m[1];
-    const keyRe = /"([a-zA-Z_][a-zA-Z0-9_]*)"\s*,/g;
-    let km: RegExpExecArray | null;
-    while ((km = keyRe.exec(inner)) !== null) {
-      const name = km[1];
+    // Split by comma to find positional args; quoted strings at even indices are keys
+    const tokens = inner.split(',').map(t => t.trim());
+    for (let i = 0; i < tokens.length; i += 2) {
+      const keyMatch = /^"([a-zA-Z_][a-zA-Z0-9_]*)"$/.exec(tokens[i]);
+      if (!keyMatch) continue;
+      const name = keyMatch[1];
       if (isNoiseName(name)) continue;
-      const absoluteIndex = m.index + m[0].indexOf(km[0]);
+      const absoluteIndex = m.index + m[0].indexOf(tokens[i]);
       const line = lineOf(content, absoluteIndex);
       fields.push({ name, side: 'response', definedAt: `${filePath}:${line}`, wasteScore: 0 });
     }

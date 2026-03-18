@@ -7,6 +7,10 @@ const fs = require('fs');
 const { mapEndpoints } = require('../dist-test/src/endpointMapper');
 const { extractFields } = require('../dist-test/src/parsers/typescript/fieldExtractor');
 const { trackUsage } = require('../dist-test/src/parsers/typescript/usageTracker');
+const { extractFields: pyExtractFields } = require('../dist-test/src/parsers/python/fieldExtractor');
+const { trackUsage: pyTrackUsage } = require('../dist-test/src/parsers/python/usageTracker');
+const { extractFields: javaExtractFields } = require('../dist-test/src/parsers/java/fieldExtractor');
+const { trackUsage: javaTrackUsage } = require('../dist-test/src/parsers/java/usageTracker');
 
 const { Project } = require('ts-morph');
 const sharedProject = new Project({ skipLoadingLibFiles: true });
@@ -14,27 +18,31 @@ const sharedProject = new Project({ skipLoadingLibFiles: true });
 const targetDir = process.argv[2];
 if (!targetDir) { console.error('Usage: node scripts/scan.js <dir>'); process.exit(1); }
 
-function collectFiles(dir) {
+const SKIP_DIRS = new Set(['node_modules','dist','build','.git','__pycache__','coverage','.venv','venv']);
+
+function collectFiles(dir, exts) {
   const results = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (['node_modules','dist','build','.git','__pycache__','coverage'].includes(entry.name)) continue;
-      results.push(...collectFiles(full));
-    } else if (/\.(ts|tsx)$/.test(entry.name) && !entry.name.endsWith('.d.ts')) {
+      if (SKIP_DIRS.has(entry.name)) continue;
+      results.push(...collectFiles(full, exts));
+    } else if (exts.some(ext => full.endsWith(ext)) && !full.endsWith('.d.ts')) {
       results.push(full);
     }
   }
   return results;
 }
 
-const files = collectFiles(path.resolve(targetDir));
+const files = collectFiles(path.resolve(targetDir), ['.ts', '.tsx']);
+const pyFiles = collectFiles(path.resolve(targetDir), ['.py']);
+const javaFiles = collectFiles(path.resolve(targetDir), ['.java']);
 for (const f of files) {
   if (!sharedProject.getSourceFile(f)) sharedProject.addSourceFileAtPath(f);
 }
 const fileContents = files.map(f => ({ path: f, content: fs.readFileSync(f, 'utf8') }));
 
-console.log(`\n Scanned ${files.length} TypeScript files in ${path.resolve(targetDir)}\n`);
+console.log(`\n Scanned ${files.length} TypeScript / ${pyFiles.length} Python / ${javaFiles.length} Java files in ${path.resolve(targetDir)}\n`);
 
 // 1. Endpoint mapping
 const endpoints = mapEndpoints(fileContents);
@@ -130,6 +138,68 @@ if (backendTotal > 0) {
   else                 console.log(`    All response fields are read by frontend`);
 } else {
   console.log('    (no backend response fields extracted)');
+}
+
+// 5b. Python backend scan
+if (pyFiles.length > 0) {
+  console.log('\n Python backend field extraction (response fields defined):');
+  let pyResponseCount = 0;
+  for (const f of pyFiles) {
+    try {
+      const defined = pyExtractFields(f);
+      const response = defined.filter(d => d.side === 'response');
+      if (response.length > 0) {
+        pyResponseCount += response.length;
+        console.log(`    ${path.relative(targetDir, f)}`);
+        response.forEach(d => console.log(`       + ${d.name}  (line ${d.definedAt.split(':').pop()})`));
+      }
+    } catch(e) { /* skip */ }
+  }
+  if (pyResponseCount === 0) console.log('    (none found)');
+
+  console.log('\n Python backend usage tracking (request fields read):');
+  let pyUsageCount = 0;
+  for (const f of pyFiles) {
+    try {
+      const tracked = pyTrackUsage(f);
+      if (tracked.length > 0) {
+        pyUsageCount += tracked.length;
+        console.log(`    ${path.relative(targetDir, f)}: [${tracked.map(t => t.name).join(', ')}]`);
+      }
+    } catch(e) { /* skip */ }
+  }
+  if (pyUsageCount === 0) console.log('    (none found)');
+}
+
+// 5c. Java backend scan
+if (javaFiles.length > 0) {
+  console.log('\n Java backend field extraction (response fields defined):');
+  let javaResponseCount = 0;
+  for (const f of javaFiles) {
+    try {
+      const defined = javaExtractFields(f);
+      const response = defined.filter(d => d.side === 'response');
+      if (response.length > 0) {
+        javaResponseCount += response.length;
+        console.log(`    ${path.relative(targetDir, f)}`);
+        response.forEach(d => console.log(`       + ${d.name}  (line ${d.definedAt.split(':').pop()})`));
+      }
+    } catch(e) { /* skip */ }
+  }
+  if (javaResponseCount === 0) console.log('    (none found)');
+
+  console.log('\n Java backend usage tracking (request fields read):');
+  let javaUsageCount = 0;
+  for (const f of javaFiles) {
+    try {
+      const tracked = javaTrackUsage(f);
+      if (tracked.length > 0) {
+        javaUsageCount += tracked.length;
+        console.log(`    ${path.relative(targetDir, f)}: [${tracked.map(t => t.name).join(', ')}]`);
+      }
+    } catch(e) { /* skip */ }
+  }
+  if (javaUsageCount === 0) console.log('    (none found)');
 }
 
 // 6. Summary

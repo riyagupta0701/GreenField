@@ -57,10 +57,10 @@ describe('javaUsageTracker', () => {
       assert.ok(fields.every(f => typeof f.definedAt === 'string' && f.definedAt.length > 0));
     });
 
-    it('deduplicates fields', () => {
-      const names = fields.map(f => f.name);
-      const unique = new Set(names);
-      assert.strictEqual(names.length, unique.size);
+    it('deduplicates fields by name + location', () => {
+      const keys = fields.map(f => `${f.name}:${f.definedAt}`);
+      const unique = new Set(keys);
+      assert.strictEqual(keys.length, unique.size);
     });
   });
 

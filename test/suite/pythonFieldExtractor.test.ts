@@ -79,8 +79,20 @@ describe('pythonFieldExtractor', () => {
       assert.ok(!fields.some(f => f.name === 'model_config'));
     });
 
-    it('marks all fields as side: "response"', () => {
-      assert.ok(fields.every(f => f.side === 'response'));
+    it('marks response dict fields as side: "response"', () => {
+      // jsonify/JSONResponse/return-dict fields are response fields
+      const responseNames = ['status', 'version', 'healthy', 'uptime', 'updated'];
+      const responseFields = fields.filter(f => responseNames.includes(f.name));
+      assert.ok(responseFields.length > 0, 'expected some response fields');
+      assert.ok(responseFields.every(f => f.side === 'response'));
+    });
+
+    it('marks Pydantic BaseModel fields as side: "request"', () => {
+      // BaseModel class fields represent request body schemas
+      const requestNames = ['username', 'email', 'age', 'userId', 'displayName', 'createdAt'];
+      const requestFields = fields.filter(f => requestNames.includes(f.name));
+      assert.ok(requestFields.length > 0, 'expected some request fields from BaseModel');
+      assert.ok(requestFields.every(f => f.side === 'request'));
     });
   });
 
