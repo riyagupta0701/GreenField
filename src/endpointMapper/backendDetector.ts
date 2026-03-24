@@ -1,5 +1,5 @@
 // Backend route detection
-// Detects @GetMapping, @app.route, router.get → extracts URL pattern
+// Detects @GetMapping, @app.route, router.get, gin/gorilla/net/http → extracts URL pattern
 
 import { normalizeUrl } from "./urlNormalizer";
 
@@ -14,6 +14,15 @@ export function detectBackendEndpoints(code: string) {
   const flaskRegex = /@app\.route\(['"`](.*?)['"`]/g
 
   const springRegex = /@(GetMapping|PostMapping|PutMapping|DeleteMapping|PatchMapping)\(['"`](.*?)['"`]/g
+
+  // Gin: r.GET("/path", handler) or router.POST("/path", handler)
+  const ginRegex = /(?:\w+)\.(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\(\s*"([^"]+)"/g
+
+  // Gorilla mux: r.HandleFunc("/path", handler).Methods("GET")
+  const gorillaMuxRegex = /\.HandleFunc\(\s*"([^"]+)"[^)]*\)(?:[^.]*\.Methods\(\s*"([A-Z]+)"\))?/g
+
+  // net/http: http.HandleFunc("/path", handler) or mux.Handle("/path", handler)
+  const netHttpRegex = /(?:http\.HandleFunc|http\.Handle|\w+\.Handle(?:Func)?)\(\s*"([^"]+)"/g
 
   for (const match of code.matchAll(expressRegex)) {
     endpoints.push({ method: match[1].toUpperCase(), path: normalizeUrl(match[2]) })
@@ -32,6 +41,21 @@ export function detectBackendEndpoints(code: string) {
       method: match[1].replace("Mapping", "").toUpperCase(),
       path: normalizeUrl(match[2])
     })
+  }
+
+  for (const match of code.matchAll(ginRegex)) {
+    endpoints.push({ method: match[1].toUpperCase(), path: normalizeUrl(match[2]) })
+  }
+
+  for (const match of code.matchAll(gorillaMuxRegex)) {
+    endpoints.push({
+      method: match[2] ?? "GET",
+      path: normalizeUrl(match[1])
+    })
+  }
+
+  for (const match of code.matchAll(netHttpRegex)) {
+    endpoints.push({ method: "GET", path: normalizeUrl(match[1]) })
   }
 
   const seen = new Set<string>()

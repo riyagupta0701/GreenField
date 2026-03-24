@@ -34,7 +34,7 @@
         "greenfield.include": {
           "type": "array",
           "default": [
-            "**/*.{ts,tsx,js,jsx,py,java}"
+            "**/*.{ts,tsx,js,jsx,py,java,go}"
           ],
           "description": "Glob patterns for files scanned by GreenField."
         },
@@ -48,7 +48,8 @@
             "**/coverage/**",
             "**/__pycache__/**",
             "**/.venv/**",
-            "**/target/**"
+            "**/target/**",
+            "**/vendor/**"
           ],
           "description": "Glob patterns excluded from GreenField scans."
         }
