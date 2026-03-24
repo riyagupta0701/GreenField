@@ -11,6 +11,8 @@ const { extractFields: pyExtractFields } = require('../dist-test/src/parsers/pyt
 const { trackUsage: pyTrackUsage } = require('../dist-test/src/parsers/python/usageTracker');
 const { extractFields: javaExtractFields } = require('../dist-test/src/parsers/java/fieldExtractor');
 const { trackUsage: javaTrackUsage } = require('../dist-test/src/parsers/java/usageTracker');
+const { extractFields: goExtractFields } = require('../dist-test/src/parsers/go/fieldExtractor');
+const { trackUsage: goTrackUsage } = require('../dist-test/src/parsers/go/usageTracker');
 
 const { Project } = require('ts-morph');
 const sharedProject = new Project({ skipLoadingLibFiles: true });
@@ -37,12 +39,13 @@ function collectFiles(dir, exts) {
 const files = collectFiles(path.resolve(targetDir), ['.ts', '.tsx']);
 const pyFiles = collectFiles(path.resolve(targetDir), ['.py']);
 const javaFiles = collectFiles(path.resolve(targetDir), ['.java']);
+const goFiles = collectFiles(path.resolve(targetDir), ['.go']);
 for (const f of files) {
   if (!sharedProject.getSourceFile(f)) sharedProject.addSourceFileAtPath(f);
 }
 const fileContents = files.map(f => ({ path: f, content: fs.readFileSync(f, 'utf8') }));
 
-console.log(`\n Scanned ${files.length} TypeScript / ${pyFiles.length} Python / ${javaFiles.length} Java files in ${path.resolve(targetDir)}\n`);
+console.log(`\n Scanned ${files.length} TypeScript / ${pyFiles.length} Python / ${javaFiles.length} Java / ${goFiles.length} Go files in ${path.resolve(targetDir)}\n`);
 
 // 1. Endpoint mapping
 const endpoints = mapEndpoints(fileContents);
@@ -202,22 +205,91 @@ if (javaFiles.length > 0) {
   if (javaUsageCount === 0) console.log('    (none found)');
 }
 
+// 5d. Go backend scan
+const goBackendResponseByFile = {};
+let goResponseCount = 0;
+let goUsageCount = 0;
+if (goFiles.length > 0) {
+  console.log('\n Go backend field extraction (response fields defined):');
+  for (const f of goFiles) {
+    try {
+      const defined = goExtractFields(f);
+      const response = defined.filter(d => d.side === 'response');
+      if (response.length > 0) {
+        goResponseCount += response.length;
+        goBackendResponseByFile[f] = response;
+        console.log(`    ${path.relative(targetDir, f)}`);
+        response.forEach(d => console.log(`       + ${d.name}  (line ${d.definedAt.split(':').pop()})`));
+      }
+    } catch(e) { /* skip */ }
+  }
+  if (goResponseCount === 0) console.log('    (none found)');
+
+  console.log('\n Go backend usage tracking (request fields read):');
+  for (const f of goFiles) {
+    try {
+      const tracked = goTrackUsage(f);
+      if (tracked.length > 0) {
+        goUsageCount += tracked.length;
+        console.log(`    ${path.relative(targetDir, f)}: [${tracked.map(t => t.name).join(', ')}]`);
+      }
+    } catch(e) { /* skip */ }
+  }
+  if (goUsageCount === 0) console.log('    (none found)');
+
+  // Dead field diff: Go backend response fields vs frontend-accessed names
+  console.log('\n Dead field analysis — Go backend → frontend read:');
+  let goDeadTotal = 0;
+  const goResponseTotal = Object.values(goBackendResponseByFile).reduce((s, fs) => s + fs.length, 0);
+  for (const [f, fields] of Object.entries(goBackendResponseByFile)) {
+    const dead = fields.filter(field => !FRONTEND_ACCESSED_NAMES.has(field.name));
+    if (dead.length === 0) continue;
+    const used = fields.filter(field => FRONTEND_ACCESSED_NAMES.has(field.name));
+    goDeadTotal += dead.length;
+    console.log(`    ${path.relative(targetDir, f)}`);
+    console.log(`       sends [${fields.length}]:  ${fields.map(f => f.name).join(', ')}`);
+    console.log(`       read  [${used.length}]:  ${used.map(f => f.name).join(', ') || 'none'}`);
+    console.log(`       DEAD  [${dead.length}]:  ${dead.map(f => `${f.name} (L${f.definedAt.split(':').pop()})`).join(', ')}`);
+  }
+  if (goDeadTotal === 0) {
+    console.log(goResponseTotal > 0
+      ? '    All Go response fields are read by frontend'
+      : '    (no Go response fields extracted)');
+  } else {
+    const goDeadPct = Math.round(goDeadTotal / goResponseTotal * 100);
+    console.log(`\n    Go dead total: ${goDeadTotal} / ${goResponseTotal} fields (${goDeadPct}%)`);
+  }
+}
+
 // 6. Summary
 const avgFieldBytes = 24;
-const wastedBytes   = backendDead * avgFieldBytes;
-const co2Wh         = wastedBytes * 10000 * 0.000000006 * 1000;
+
+const goResponseTotal = Object.values(goBackendResponseByFile).reduce((s, fs) => s + fs.length, 0);
+const goDeadTotal = Object.values(goBackendResponseByFile)
+  .flat()
+  .filter(field => !FRONTEND_ACCESSED_NAMES.has(field.name)).length;
+
+const totalDead  = backendDead + goDeadTotal;
+const totalResp  = backendTotal + goResponseTotal;
+const wastedBytes = totalDead * avgFieldBytes;
+const co2Wh      = wastedBytes * 10000 * 0.000000006 * 1000;
 
 console.log('\n════════════════════════════════════════════');
 console.log('  GreenField Scan Summary');
 console.log('════════════════════════════════════════════');
 console.log(`  Target:                    ${path.resolve(targetDir)}`);
-console.log(`  Files scanned:             ${files.length}`);
+console.log(`  Files scanned:             ${files.length} TS / ${pyFiles.length} Py / ${javaFiles.length} Java / ${goFiles.length} Go`);
 console.log(`  Endpoints mapped:          ${endpoints.length}`);
 console.log(`  Request body fields found: ${totalDefinedFields}`);
 console.log(`  Response fields tracked:   ${totalTrackedFields}`);
-console.log(`  Backend response fields:   ${backendTotal}`);
 if (backendTotal > 0) {
-  console.log(`  Dead response fields:      ${backendDead} / ${backendTotal} (${Math.round(backendDead/backendTotal*100)}%)`);
+  console.log(`  TS  dead response fields:  ${backendDead} / ${backendTotal} (${Math.round(backendDead/backendTotal*100)}%)`);
+}
+if (goResponseTotal > 0) {
+  console.log(`  Go  dead response fields:  ${goDeadTotal} / ${goResponseTotal} (${Math.round(goDeadTotal/goResponseTotal*100)}%)`);
+}
+if (totalResp > 0) {
+  console.log(`  Total dead fields:         ${totalDead} / ${totalResp} (${Math.round(totalDead/totalResp*100)}%)`);
   console.log(`  Est. wasted bytes/request: ~${wastedBytes} bytes`);
   console.log(`  Est. CO2 waste @10k req/d: ~${co2Wh.toFixed(4)} Wh/day`);
 }
