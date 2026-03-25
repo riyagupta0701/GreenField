@@ -105,21 +105,11 @@ The CO₂/day estimate uses the 0.000000006 kWh/byte coefficient from Aslan et a
 
 ## Evaluation Plan
 
-### RQ1 — Accuracy (no human data)
-- Build 20 synthetic full-stack projects with injected known dead fields
-- Measure **precision** and **recall** of GreenField detection
-- Vary patterns: destructuring, optional chaining, dynamic keys
+### RQ1
+- To what extent do web applications transmit JSON fields that are not used?
 
-### RQ2 — Real-World Prevalence (no human data)
-- Run GreenField on 10 public open-source full-stack repos (e.g., Cal.com, Focalboard, Mattermost)
-- Report: % dead fields per endpoint, avg wasted KB/request, distribution by stack
-
-### RQ3 — Energy Impact (no human data)
-- Take top 3 dead-field candidates from RQ2
-- Remove dead fields, benchmark request-response cycle before/after
-- Measure energy with `pyRAPL` on controlled server
-- Report: energy reduction per request × realistic daily request volume
-
+### RQ2
+- How effectively can static analysis identify and help reduce redundant JSON field transmission to improve efficiency and sustainability?
 ---
 
 ## Task Split (5 People, ~4 Weeks)
