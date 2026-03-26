@@ -8,7 +8,7 @@ import { trackUsage as javaTrackUsage } from "./parsers/java/usageTracker";
 import { extractFields as goExtractFields } from "./parsers/go/fieldExtractor";
 import { trackUsage as goTrackUsage } from "./parsers/go/usageTracker";
 import { createStatusBar } from "./ui/statusBar";
-import { runDiff } from "./diffEngine";
+import { runDiff, scoreWaste } from "./diffEngine";
 import { Endpoint, FieldSet } from "./types";
 
 /**
@@ -101,7 +101,11 @@ export function activate(context: vscode.ExtensionContext) {
 
       function globalDeadFields(extractFn: (p: string, ...args: any[]) => import('./types').Field[], langFiles: vscode.Uri[]) {
         return langFiles.flatMap(f => {
-          try { return extractFn(f.fsPath).filter(field => field.side === 'response' && !allAccessedNames.has(field.name)); }
+          try {
+            return extractFn(f.fsPath)
+              .filter(field => field.side === 'response' && !allAccessedNames.has(field.name))
+              .map(field => ({ ...field, wasteScore: scoreWaste(field, 32, 10_000) }));
+          }
           catch { return []; }
         });
       }
