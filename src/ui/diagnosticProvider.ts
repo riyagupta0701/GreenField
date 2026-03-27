@@ -1,8 +1,41 @@
 import * as vscode from 'vscode';
 import { FieldSet, Field, Location } from '../types';
 
-function hasLocation(field: Field): field is Field & { definedAt: Location } {
-  return !!field.definedAt && typeof field.definedAt !== 'string' && typeof field.definedAt.uri === 'string';
+function getFieldLocation(field: Field): { uri: vscode.Uri, range: vscode.Range } | null {
+  if (!field.definedAt) return null;
+
+  if (typeof field.definedAt === 'string') {
+    // definedAt is a string like "path/to/file:line"
+    const lastColonIdx = field.definedAt.lastIndexOf(':');
+    if (lastColonIdx === -1) return null;
+
+    const pathPart = field.definedAt.substring(0, lastColonIdx);
+    const linePart = field.definedAt.substring(lastColonIdx + 1);
+    const line = parseInt(linePart, 10);
+    
+    if (isNaN(line)) return null;
+
+    // Line is 1-indexed in the string, convert to 0-indexed for VS Code
+    const zeroIndexedLine = Math.max(0, line - 1);
+
+    return {
+      uri: vscode.Uri.file(pathPart),
+      range: new vscode.Range(zeroIndexedLine, 0, zeroIndexedLine, 1000)
+    };
+  } else if (typeof field.definedAt === 'object' && field.definedAt.uri) {
+    // Handle the old mock / strict Location object format if it's still floating around
+    const loc = field.definedAt;
+    return {
+      uri: vscode.Uri.parse(loc.uri),
+      range: new vscode.Range(
+        Math.max(0, loc.range.startLine),
+        loc.range.startCharacter,
+        Math.max(0, loc.range.endLine),
+        loc.range.endCharacter
+      )
+    };
+  }
+  return null;
 }
 
 interface DocumentDiagnostics {
@@ -19,15 +52,6 @@ export class GreenFieldDiagnosticProvider {
     this.diagnosticCollection = vscode.languages.createDiagnosticCollection('greenfield');
   }
 
-  private buildRange(loc: Location): vscode.Range {
-    return new vscode.Range(
-      Math.max(0, loc.range.startLine),
-      loc.range.startCharacter,
-      Math.max(0, loc.range.endLine),
-      loc.range.endCharacter
-    );
-  }
-
   update(fieldSets: FieldSet[]): void {
     this.diagnosticCollection.clear();
     this.documentData.clear();
@@ -35,11 +59,11 @@ export class GreenFieldDiagnosticProvider {
     for (const fs of fieldSets) {
       if (!fs.deadFields) continue;
       for (const field of fs.deadFields) {
-        if (!hasLocation(field)) continue;
+        const locInfo = getFieldLocation(field);
+        if (!locInfo) continue;
         
         // Normalize the URI string right away so it matches VS Code's internal serialization
-        // This prevents map lookup misses caused by AST strings having different encoding/slashes.
-        const normalizedUri = vscode.Uri.parse(field.definedAt.uri);
+        const normalizedUri = locInfo.uri;
         const uriString = normalizedUri.toString();
         
         let docData = this.documentData.get(uriString);
@@ -49,10 +73,8 @@ export class GreenFieldDiagnosticProvider {
           this.documentData.set(uriString, docData);
         }
 
-        const range = this.buildRange(field.definedAt);
-
         const diagnostic = new vscode.Diagnostic(
-          range,
+          locInfo.range,
           `GreenField: '${field.name}' is defined but never accessed by the ${field.side === 'response' ? 'frontend' : 'backend'}. Estimated waste: ~${field.wasteScore.toFixed(2)} bytes/req`,
           vscode.DiagnosticSeverity.Warning
         );
@@ -75,9 +97,10 @@ export class GreenFieldDiagnosticProvider {
 
     // Narrowed down to only the fields in this specific file
     for (const field of docData.fields) {
-      if (!hasLocation(field)) continue;
+      const locInfo = getFieldLocation(field);
+      if (!locInfo) continue;
       
-      const range = this.buildRange(field.definedAt);
+      const range = locInfo.range;
       
       if (range.contains(position)) {
         return field;
@@ -88,13 +111,11 @@ export class GreenFieldDiagnosticProvider {
 
   // Document version awareness (Anti-drift)
   handleDocumentChange(event: vscode.TextDocumentChangeEvent): void {
+    // Only wipe out the diagnostics for this specific file if there is an actual text change.
+    // Make sure we use the same URI serialization string we use when setting the Map
     const uriStr = event.document.uri.toString();
     if (this.documentData.has(uriStr) && event.contentChanges.length > 0) {
-      // Clear the diagnostics immediately if the user types anything, 
-      // preventing the squiggles from drifting to the wrong lines.
-      // They will be safely re-calculated on the next "Save".
       this.diagnosticCollection.delete(event.document.uri);
-      this.documentData.delete(uriStr);
     }
   }
 

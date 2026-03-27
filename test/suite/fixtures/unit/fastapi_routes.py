@@ -8,16 +8,11 @@ app = FastAPI()
 # Pydantic model with real fields
 class CreateUserRequest(BaseModel):
     username: str
-    email: str
-    age: Optional[int] = None
     # Pydantic noise names — should be filtered
     model_config = {"arbitrary_types_allowed": True}
 
 # Pydantic response model
 class UserResponse(BaseModel):
-    userId: int
-    displayName: str
-    createdAt: str
 
 # Pattern C: JSONResponse(content={...})
 @app.get('/api/status')
@@ -27,7 +22,7 @@ def get_status():
 # Pattern B: direct dict return (FastAPI)
 @app.get('/api/health')
 def health_check():
-    return {"healthy": True, "uptime": 9999}
+    return {"healthy": True}
 
 # Pattern E: Pydantic model param — conservative tracking
 @app.post('/api/users')
@@ -40,5 +35,6 @@ def create_user(item: CreateUserRequest):
 @app.post('/api/users/update')
 def update_user(item: CreateUserRequest):
     print(item.email)
+    print("hi")
     print(item.age)
     return {"updated": True}

@@ -104,13 +104,27 @@ export class GreenFieldPanel {
     const rows = safeFieldSets.flatMap(fs => 
       fs.deadFields?.map(df => {
         totalWaste += df.wasteScore;
-        const uriString = typeof df.definedAt === 'string' ? df.definedAt : df.definedAt.uri.toString();
-        const startLine = typeof df.definedAt === 'string' ? 0 : df.definedAt.range.startLine;
+        let fileUri = '';
+        let startLine = 0;
+        
+        if (typeof df.definedAt === 'string') {
+          const lastColonIdx = df.definedAt.lastIndexOf(':');
+          if (lastColonIdx !== -1) {
+            fileUri = vscode.Uri.file(df.definedAt.substring(0, lastColonIdx)).toString();
+            // Line is 1-indexed in the string, 0-indexed for VS Code jump
+            startLine = Math.max(0, parseInt(df.definedAt.substring(lastColonIdx + 1), 10) - 1) || 0;
+          } else {
+            fileUri = vscode.Uri.file(df.definedAt).toString();
+          }
+        } else {
+          fileUri = df.definedAt.uri.toString();
+          startLine = df.definedAt.range.startLine;
+        }
         
         const safePattern = this.escapeHtml(fs.endpoint?.pattern || 'Unknown Endpoint');
         const safeMethod = this.escapeHtml(fs.endpoint?.method || 'N/A');
         const safeName = this.escapeHtml(df.name);
-        const safeUri = this.escapeHtml(uriString);
+        const safeUri = this.escapeHtml(fileUri);
         
         return `
           <tr>
