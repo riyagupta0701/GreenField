@@ -7,16 +7,26 @@ export interface Endpoint {
   frontendFiles: string[]
 }
 
+export interface Location {
+  uri: string;
+  range: {
+    startLine: number;
+    startCharacter: number;
+    endLine: number;
+    endCharacter: number;
+  };
+}
+
 export interface Field {
   name: string
   side: 'request' | 'response'
-  definedAt: string
-  wasteScore?: number
+  definedAt: string | Location
+  wasteScore: number
 }
 
 export interface FieldSet {
   endpoint: Endpoint
   definedFields: Field[]
   accessedFields: Field[]
-  deadFields?: Field[]
+  deadFields: Field[]
 }
