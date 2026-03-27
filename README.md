@@ -374,11 +374,33 @@ Replace the filename with any of the test files below.
 
 **Test fixtures** (real source files the parsers run against) are in `test/suite/fixtures/unit/`.
 
-# RQ1 — Benchmark Suite
+# Reproducibility
+
+All experiments can be reproduced from a clean clone of this repository. The steps below cover the full setup and each research question independently.
+
+## Prerequisites
+
+- Node.js ≥ 18
+- npm ≥ 9
+- `ts-node` (installed as a dev dependency — use `npx ts-node`)
+
+```bash
+git clone <repo-url>
+cd GreenField
+npm install
+npm run compile       # compiles src/ → dist/  (needed by scan.js)
+npm test              # compiles test build → dist-test/ and runs all unit tests
+```
+
+> `evaluation/rq1/run.ts` and `scripts/scan.js` both require the compiled output in `dist-test/`. Running `npm test` produces it. If you only need the scan CLI, `npm run compile` is sufficient.
+
+---
+
+## RQ1 — Accuracy on Synthetic Benchmarks
 
 The benchmark suite (`test/benchmarks/synthetic/`) validates diff engine accuracy across 20 synthetic projects covering all supported languages and dead field patterns.
 
-**Generate the benchmarks:**
+**Step 1 — Generate the benchmark projects:**
 
 ```bash
 npx ts-node test/benchmarks/synthetic/generate.ts
@@ -387,7 +409,15 @@ npx ts-node test/benchmarks/synthetic/generate.ts
 This creates 20 project directories under `test/benchmarks/synthetic/`, each containing:
 - A backend file (TypeScript, Python, Java, or Go) that defines response fields
 - A frontend TypeScript file that accesses some of those fields
-- A `fields.json` ground truth specifying which fields are dead
+- An `expected.json` ground-truth file listing which fields are dead
+
+**Step 2 — Run the evaluation:**
+
+```bash
+npx ts-node evaluation/rq1/run.ts
+```
+
+The script prints per-project results (expected vs. detected dead fields, TP / FP / FN) and aggregate macro/micro precision and recall.
 
 **Patterns covered:**
 
@@ -402,22 +432,39 @@ This creates 20 project directories under `test/benchmarks/synthetic/`, each con
 | Python backend | FastAPI / Flask response dicts |
 | Java backend | Spring Boot DTO + `Map.of()` |
 
-**Run the RQ1 evaluation:**
+**Expected output shape:**
 
-```bash
-npx ts-node evaluation/rq1/run.ts
+```
+=== RQ1 — Per-project Results ===
+
+✓ project-01
+    Expected:  [lastLoginIp, createdAt]
+    Detected:  [lastLoginIp, createdAt]
+    TP=2  FP=0  FN=0
+    Precision=100.0%  Recall=100.0%
+...
+=== Aggregate ===
+Projects evaluated: 20 / 20
+Macro Precision: XX.X%
+Macro Recall:    XX.X%
+Micro Precision: XX.X%
+Micro Recall:    XX.X%
 ```
 
-Reports per-project and aggregate **precision** and **recall** for dead field detection.
+---
 
+## RQ2 — Real-World Prevalence
 
-# Real-World Evaluation (RQ2)
+GreenField has been run against two public open-source repositories to validate detection at scale. Both require only `npm run compile` before scanning.
 
-GreenField has been run against a public open-source repository to validate detection at scale.
-
-## Mattermost
+### Mattermost
 
 A large-scale production codebase: React + Redux TypeScript frontend, Go backend.
+
+```bash
+git clone https://github.com/mattermost/mattermost.git
+node scripts/scan.js /path/to/mattermost
+```
 
 | Metric | Value |
 |---|---|
@@ -431,16 +478,14 @@ A large-scale production codebase: React + Redux TypeScript frontend, Go backend
 
 > **Note:** Mattermost uses a two-level sub-router pattern (`api.BaseRoutes.X.Handle(...)`) where full URL paths are not present in a single file. The endpoint mapper cannot reconstruct them via single-file regex analysis, so per-endpoint dead field analysis is unavailable. The figures above come from the global fallback analysis (all Go response fields vs all frontend-accessed names). This is a known limitation documented as future work.
 
-### To replicate:
-
-```bash
-git clone https://github.com/mattermost/mattermost.git
-node scripts/scan.js /path/to/mattermost
-```
-
-## open-webui
+### open-webui
 
 A production AI chat application: Svelte/TypeScript frontend, Python (FastAPI) backend.
+
+```bash
+git clone https://github.com/open-webui/open-webui.git
+node scripts/scan.js /path/to/open-webui
+```
 
 | Metric | Value |
 |---|---|
@@ -454,9 +499,15 @@ A production AI chat application: Svelte/TypeScript frontend, Python (FastAPI) b
 
 The Python FastAPI backend defines 106 response fields across its route handlers. GreenField detected 85 (80%) as dead — never accessed by the frontend. This demonstrates the tool working end-to-end on a real Python + TypeScript stack.
 
-### To replicate:
+---
+
+## Scanning Any Project
+
+To run GreenField against an arbitrary codebase:
 
 ```bash
-git clone https://github.com/open-webui/open-webui.git
-node scripts/scan.js /path/to/open-webui
+npm run compile
+node scripts/scan.js /path/to/your/project
 ```
+
+The CLI prints endpoints, extracted fields, usage tracking results, and dead field analysis to stdout. No VS Code installation required.
