@@ -28,5 +28,5 @@ export interface FieldSet {
   endpoint: Endpoint
   definedFields: Field[]
   accessedFields: Field[]
-  deadFields: Field[]
+  deadFields?: Field[]
 }
