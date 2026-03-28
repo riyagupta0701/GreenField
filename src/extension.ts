@@ -181,7 +181,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (!silent) {
         // Open Webview Panel to show results
         const panel = GreenFieldPanel.createOrShow(context.extensionUri);
-        panel.update(fieldSets);
+        panel.update(fieldSets, globalAnalysis);
 
         // Always show all endpoints; annotate with dead fields where available
         const output = {
@@ -205,7 +205,7 @@ export function activate(context: vscode.ExtensionContext) {
         // If it's silent, just update the panel if it happens to be open in the background, 
         // without stealing focus.
         if (GreenFieldPanel.currentPanel) {
-          GreenFieldPanel.currentPanel.update(fieldSets);
+          GreenFieldPanel.currentPanel.update(fieldSets, globalAnalysis);
         }
       }
     }

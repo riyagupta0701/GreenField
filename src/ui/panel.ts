@@ -70,10 +70,10 @@ export class GreenFieldPanel {
     return GreenFieldPanel.currentPanel;
   }
 
-  public update(fieldSets: FieldSet[]): void {
+  public update(fieldSets: FieldSet[], globalAnalysis?: Record<string, import('../types').Field[]>): void {
     const webview = this._panel.webview;
     this._panel.title = '🌱 GreenField Dashboard';
-    this._panel.webview.html = this.getHtmlForWebview(webview, fieldSets);
+    this._panel.webview.html = this.getHtmlForWebview(webview, fieldSets, globalAnalysis);
   }
 
   private escapeHtml(unsafe: string): string {
@@ -94,7 +94,7 @@ export class GreenFieldPanel {
     return text;
   }
 
-  private getHtmlForWebview(webview: vscode.Webview, fieldSets: FieldSet[]): string {
+  private getHtmlForWebview(webview: vscode.Webview, fieldSets: FieldSet[], globalAnalysis?: Record<string, import('../types').Field[]>): string {
     const nonce = this.getNonce();
     let totalWaste = 0;
     
@@ -141,11 +141,55 @@ export class GreenFieldPanel {
       }) || []
     ).join('');
 
-    const co2Estimate = (totalWaste * 0.000000001 * 0.2).toFixed(10); // arbitrary formulation based on bytes
+    let globalRows = '';
+    if (globalAnalysis) {
+      const globalFields = Object.values(globalAnalysis).flat();
+      globalRows = globalFields.map(df => {
+        totalWaste += df.wasteScore || 0;
+        let fileUri = '';
+        let startLine = 0;
+        
+        if (typeof df.definedAt === 'string') {
+          const lastColonIdx = df.definedAt.lastIndexOf(':');
+          if (lastColonIdx !== -1) {
+            fileUri = vscode.Uri.file(df.definedAt.substring(0, lastColonIdx)).toString();
+            startLine = Math.max(0, parseInt(df.definedAt.substring(lastColonIdx + 1), 10) - 1) || 0;
+          } else {
+            fileUri = vscode.Uri.file(df.definedAt).toString();
+          }
+        } else {
+          fileUri = df.definedAt.uri.toString();
+          startLine = df.definedAt.range.startLine;
+        }
 
-    const emptyState = rows.length === 0 
+        const safePattern = this.escapeHtml('Global Analysis (No Endpoint Match)');
+        const safeMethod = 'UNMAPPED';
+        const safeName = this.escapeHtml(df.name);
+        const safeUri = this.escapeHtml(fileUri);
+        
+        return `
+          <tr>
+            <td><code>${safePattern}</code> <span class="badge" style="background:#555;color:#fff;">${safeMethod}</span></td>
+            <td><code>${safeName}</code></td>
+            <td class="waste-score">${df.wasteScore || 0} bytes</td>
+            <td>
+              <button class="reveal-btn" data-uri="${safeUri}" data-line="${startLine}">
+                Jump to file
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    const co2Estimate = (totalWaste * 0.000000001 * 0.2).toFixed(10); // arbitrary formulation based on bytes
+    
+    // Calculate total rows to see if we show the empty state
+    const hasAnyRows = (rows.length > 0) || (globalRows.length > 0);
+
+    const emptyState = !hasAnyRows
       ? `<tr><td colspan="4" class="empty-state">🎉 You have zero dead fields! Your data is fully sustainable.</td></tr>`
-      : rows;
+      : (rows + globalRows);
 
     return `
       <!DOCTYPE html>
