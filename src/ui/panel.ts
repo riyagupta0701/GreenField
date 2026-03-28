@@ -97,6 +97,34 @@ export class GreenFieldPanel {
   private getHtmlForWebview(webview: vscode.Webview, fieldSets: FieldSet[], globalAnalysis?: Record<string, import('../types').Field[]>): string {
     const nonce = this.getNonce();
     let totalWaste = 0;
+        // Helper to format numbers with commas
+        function formatWithCommas(x: number): string {
+          return x.toLocaleString();
+        }
+
+        // Helper to convert number to English words (short, for millions/billions)
+        function numberToWords(num: number): string {
+          if (num >= 1_000_000_000) {
+            const billions = Math.floor(num / 1_000_000_000);
+            const millions = Math.floor((num % 1_000_000_000) / 1_000_000);
+            const thousands = Math.floor((num % 1_000_000) / 1_000);
+            let result = `${billions} billion`;
+            if (millions > 0) result += ` ${millions} million`;
+            if (thousands > 0) result += ` ${thousands} thousand`;
+            return result + ' bytes';
+          } else if (num >= 1_000_000) {
+            const millions = Math.floor(num / 1_000_000);
+            const thousands = Math.floor((num % 1_000_000) / 1_000);
+            let result = `${millions} million`;
+            if (thousands > 0) result += ` ${thousands} thousand`;
+            return result + ' bytes';
+          } else if (num >= 1_000) {
+            const thousands = Math.floor(num / 1_000);
+            return `${thousands} thousand bytes`;
+          } else {
+            return `${num} bytes`;
+          }
+        }
     
     // Safety check just in case endpoints passed is undefined/null
     const safeFieldSets = Array.isArray(fieldSets) ? fieldSets : [];
@@ -182,7 +210,17 @@ export class GreenFieldPanel {
       }).join('');
     }
 
-    const co2Estimate = (totalWaste * 0.000000001 * 0.2).toFixed(10); // arbitrary formulation based on bytes
+    // To calculate the estimated CO₂ emissions of wasted payload bytes, this calculation utilizes a conservative emissions coefficient of 0.06916 gCO₂e per MB.
+    // This is derived by multiplying the network and data center operational and embodied energy intensity (0.14 kWh/GB, excluding user devices, based on the Sustainable Web Design Model V4)
+    // by the global average grid carbon intensity of 494 gCO₂e/kWh: 0.14 kWh/GB × 494 g/kWh = 69.16 g/GB = 0.06916 g/MB = 0.00000006916 g/byte.
+    // Citation: Sustainable Web Design Model V4, global grid intensity from Ember 2023.
+    const CO2_PER_BYTE = 0.00000006916;
+    const co2Estimate = (totalWaste * CO2_PER_BYTE).toFixed(6); // 6 decimals for reasonable precision
+    // Format for display
+    const totalWasteWithCommas = formatWithCommas(totalWaste);
+    const totalWasteInWords = numberToWords(totalWaste);
+    // Carbon: show as grams CO2e per day, rounded, with label
+    const co2EstimateRounded = Number(co2Estimate).toLocaleString(undefined, { maximumFractionDigits: 3 });
     
     // Calculate total rows to see if we show the empty state
     const hasAnyRows = (rows.length > 0) || (globalRows.length > 0);
@@ -258,18 +296,20 @@ export class GreenFieldPanel {
       <body>
           <h1>🌱 Sustainable Software Engineering Dashboard</h1>
           
-          <div class="summary-cards">
+
+            <div class="summary-cards">
               <div class="card">
-                  <h3>Total Network Waste</h3>
-                  <p class="value">${totalWaste} B</p>
-                  <p style="font-size: 12px; margin-top: 5px;">Dead JSON payload capacity</p>
+                <h3>Total Network Waste</h3>
+                <p class="value">${totalWasteWithCommas} B</p>
+                <p style="font-size: 13px; color: #aaa; margin: 0;">(${totalWasteInWords})</p>
+                <p style="font-size: 12px; margin-top: 5px;">Dead JSON payload capacity per day</p>
               </div>
               <div class="card accent">
-                  <h3>Estimated Carbon Footprint</h3>
-                  <p class="value">${co2Estimate}</p>
-                  <p style="font-size: 12px; margin-top: 5px;">gCO2eq at 1M requests/month</p>
+                <h3>Estimated Carbon Footprint per Day</h3>
+                <p class="value">${co2EstimateRounded} grams CO₂e / day</p>
+                <p style="font-size: 12px; margin-top: 5px; color: #888;">Based on daily dead payload volume</p>
               </div>
-          </div>
+            </div>
 
           <h2>Dead Field Ledger</h2>
           <table>
