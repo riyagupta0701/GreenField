@@ -8,6 +8,10 @@ import { trackUsage as javaTrackUsage } from "./parsers/java/usageTracker";
 import { extractFields as goExtractFields } from "./parsers/go/fieldExtractor";
 import { trackUsage as goTrackUsage } from "./parsers/go/usageTracker";
 import { createStatusBar } from "./ui/statusBar";
+import { GreenFieldDiagnosticProvider } from "./ui/diagnosticProvider";
+import { GreenFieldHoverProvider } from "./ui/hoverProvider";
+import { GreenFieldQuickFixProvider } from "./ui/quickFix";
+import { GreenFieldPanel } from "./ui/panel";
 import { runDiff, scoreWaste } from "./diffEngine";
 import { Endpoint, FieldSet } from "./types";
 
@@ -29,6 +33,7 @@ function buildFieldSet(endpoint: Endpoint): FieldSet | null {
       endpoint,
       definedFields:  pyExtractFields(backendFile),
       accessedFields: frontendFiles.flatMap(f => tsTrackUsage(f)),
+      deadFields: []
     };
   }
 
@@ -37,6 +42,7 @@ function buildFieldSet(endpoint: Endpoint): FieldSet | null {
       endpoint,
       definedFields:  frontendFiles.flatMap(f => tsExtractFields(f)),
       accessedFields: javaTrackUsage(backendFile),
+      deadFields: []
     };
   }
 
@@ -45,6 +51,7 @@ function buildFieldSet(endpoint: Endpoint): FieldSet | null {
       endpoint,
       definedFields:  goExtractFields(backendFile),
       accessedFields: frontendFiles.flatMap(f => tsTrackUsage(f)),
+      deadFields: []
     };
   }
 
@@ -54,6 +61,7 @@ function buildFieldSet(endpoint: Endpoint): FieldSet | null {
       endpoint,
       definedFields:  tsExtractBackendFields(backendFile),
       accessedFields: frontendFiles.flatMap(f => tsTrackUsage(f)),
+      deadFields: []
     };
   }
 
@@ -63,9 +71,38 @@ function buildFieldSet(endpoint: Endpoint): FieldSet | null {
 export function activate(context: vscode.ExtensionContext) {
   const status = createStatusBar();
 
+  // Initialize UI components
+  const diagnosticProvider = new GreenFieldDiagnosticProvider();
+  
+  context.subscriptions.push(
+    vscode.languages.registerHoverProvider(
+      { scheme: 'file' },
+      new GreenFieldHoverProvider(diagnosticProvider)
+    ),
+    vscode.languages.registerCodeActionsProvider(
+      { scheme: 'file' },
+      new GreenFieldQuickFixProvider(diagnosticProvider),
+      {
+        providedCodeActionKinds: [vscode.CodeActionKind.QuickFix]
+      }
+    ),
+    vscode.workspace.onDidChangeTextDocument((e) => diagnosticProvider.handleDocumentChange(e)),
+    vscode.workspace.onDidSaveTextDocument((document) => {
+      // Re-run the scan command when a file is saved so the UI stays up to date
+      const supportedLangs = ['typescript', 'javascript', 'typescriptreact', 'javascriptreact', 'python', 'java', 'go'];
+      if (supportedLangs.includes(document.languageId)) {
+        // Pass 'true' so the scan is silent and doesnt steal focus
+        vscode.commands.executeCommand('greenfield.scanWorkspace', true);
+      }
+    })
+  );
+
   const command = vscode.commands.registerCommand(
     'greenfield.scanWorkspace',
-    async () => {
+    async (...args: any[]) => {
+      // Check if any argument passed is the literal boolean `true`
+      const silent = args.includes(true);
+      
       const files = await vscode.workspace.findFiles(
         "**/*.{ts,tsx,js,jsx,py,java,go}",
         "**/{node_modules,dist,build,.git,coverage,target,.next,__pycache__,vendor}/**"
@@ -133,27 +170,44 @@ export function activate(context: vscode.ExtensionContext) {
 
       const langSummary = langCounts.map(l => `${l.lang}: ${l.files} files`).join(' | ');
 
-      // Always show all endpoints; annotate with dead fields where available
-      const output = {
-        endpoints,
-        deadFieldAnalysis: fieldSets,
-        globalDeadFieldAnalysis: globalAnalysis,
-      };
-
-      const doc = await vscode.workspace.openTextDocument({
-        content: JSON.stringify(output, null, 2),
-        language: "json"
-      });
-
-      await vscode.window.showTextDocument(doc);
+      // Update UI components with exact endpoint matches and global matches
+      diagnosticProvider.update(fieldSets, globalAnalysis);
 
       const kb = (totalWasteBytes / 1000).toFixed(1);
       status.text = `⚡ GreenField: ${endpoints.length} endpoints | ${totalDead} dead fields | ~${kb} KB/req wasted`;
 
-      vscode.window.showInformationMessage(
-        `GreenField: ${endpoints.length} endpoints mapped, ${totalDead} dead fields found (${kb} KB/req wasted)` +
-        (langSummary ? ` | ${langSummary}` : '')
-      );
+      // If we are doing a silent background scan (e.g. on file save), we don't 
+      // want to pop open the Dashboard or JSON document, just update diagnostics and status bar.
+      if (!silent) {
+        // Open Webview Panel to show results
+        const panel = GreenFieldPanel.createOrShow(context.extensionUri);
+        panel.update(fieldSets, globalAnalysis);
+
+        // Always show all endpoints; annotate with dead fields where available
+        const output = {
+          endpoints,
+          deadFieldAnalysis: fieldSets,
+          globalDeadFieldAnalysis: globalAnalysis,
+        };
+
+        const doc = await vscode.workspace.openTextDocument({
+          content: JSON.stringify(output, null, 2),
+          language: "json"
+        });
+
+        await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside });
+
+        vscode.window.showInformationMessage(
+          `GreenField: ${endpoints.length} endpoints mapped, ${totalDead} dead fields found (${kb} KB/req wasted)` +
+          (langSummary ? ` | ${langSummary}` : '')
+        );
+      } else {
+        // If it's silent, just update the panel if it happens to be open in the background, 
+        // without stealing focus.
+        if (GreenFieldPanel.currentPanel) {
+          GreenFieldPanel.currentPanel.update(fieldSets, globalAnalysis);
+        }
+      }
     }
   );
 
