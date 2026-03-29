@@ -1,4 +1,3 @@
-// Person E — GreenField Panel (WebviewPanel)
 // Per-endpoint breakdown: live vs dead fields, waste score
 import * as vscode from 'vscode';
 import { FieldSet } from '../types';
@@ -221,10 +220,7 @@ export class GreenFieldPanel {
       }).join('');
     }
 
-    // To calculate the estimated CO₂ emissions of wasted payload bytes, this calculation utilizes a conservative emissions coefficient of 0.06916 gCO₂e per MB.
-    // This is derived by multiplying the network and data center operational and embodied energy intensity (0.14 kWh/GB, excluding user devices, based on the Sustainable Web Design Model V4)
-    // by the global average grid carbon intensity of 494 gCO₂e/kWh: 0.14 kWh/GB × 494 g/kWh = 69.16 g/GB = 0.06916 g/MB = 0.00000006916 g/byte.
-    // Citation: Sustainable Web Design Model V4, global grid intensity from Ember 2023.
+    // 0.06916 gCO₂e/MB = 0.14 kWh/GB (SWD Model V4) × 494 gCO₂e/kWh (Ember 2023)
     const CO2_PER_BYTE = 0.00000006916;
     const co2Estimate = (totalWaste * CO2_PER_BYTE).toFixed(6); // 6 decimals for reasonable precision
     // Format for display

@@ -1,4 +1,3 @@
-// Person C — Java backend field extraction
 // Extracts fields from Spring @ResponseBody DTOs and response maps
 // Uses regex (same approach as backendDetector.ts) — no tree-sitter dependency
 // NOTE: Java records (`record UserDto(String name)`) are not supported in MVP.

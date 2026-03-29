@@ -1,4 +1,3 @@
-// Person D — Dead field diff computation
 // dead_response_fields = Defined(backend response) − Accessed(frontend)
 // dead_request_fields  = Defined(frontend request) − Accessed(backend)
 import { Field, FieldSet } from '../types';

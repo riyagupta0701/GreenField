@@ -5,17 +5,17 @@
  * computes precision and recall per project and overall.
  *
  * Usage:
- *   npx ts-node evaluation/rq1/run.ts
+ *   npx ts-node evaluation/run.ts
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { computeDiff } from '../../src/diffEngine/differ';
-import { Field } from '../../src/types';
-import { extractFields as tsExtractFields } from '../../src/parsers/typescript/fieldExtractor';
-import { trackUsage   as tsTrackUsage   } from '../../src/parsers/typescript/usageTracker';
-import { extractFields as pyExtractFields } from '../../src/parsers/python/fieldExtractor';
-import { trackUsage   as javaTrackUsage } from '../../src/parsers/java/usageTracker';
+import { computeDiff } from '../src/diffEngine/differ';
+import { Field } from '../src/types';
+import { extractFields as tsExtractFields } from '../src/parsers/typescript/fieldExtractor';
+import { trackUsage   as tsTrackUsage   } from '../src/parsers/typescript/usageTracker';
+import { extractFields as pyExtractFields } from '../src/parsers/python/fieldExtractor';
+import { trackUsage   as javaTrackUsage } from '../src/parsers/java/usageTracker';
 
 const BENCHMARKS_DIR = path.resolve(__dirname, '../../test/benchmarks/synthetic');
 
@@ -61,7 +61,7 @@ function filesIn(dir: string, ext: string): string[] {
  *    accessed = Java trackUsage on backend .java files  (what backend reads)
  *
  *  TS backend (projects 01–15):
- *    Person B's TS extractor handles frontend request bodies, not backend res.json().
+ *    The TS extractor handles frontend request bodies, not backend res.json().
  *    Falls back to fields.json (gitignored local stub) until a TS backend
  *    response extractor is implemented.
  */

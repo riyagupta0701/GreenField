@@ -1,4 +1,3 @@
-// Person C — Java backend usage tracking
 // Tracks request field access: Spring @RequestBody binding, @RequestParam, getParameter
 // Uses regex (same approach as backendDetector.ts) — no tree-sitter dependency
 

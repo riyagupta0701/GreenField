@@ -1,9 +1,5 @@
-// Person D — Waste scorer
 // score = estimated_field_bytes × estimated_daily_requests
-// CO₂/day = wasted_bytes_per_day × 0.00000000006 kWh/byte
-//   Source: Aslan et al. (2018) "Electricity Intensity of Internet Data Transmission"
-//   Journal of Industrial Ecology — 0.06 kWh/GB for fixed-line networks
-//   (0.06 kWh/GB ÷ 1,000,000,000 bytes/GB = 6×10⁻¹¹ kWh/byte)
+// CO₂/day = wasted_bytes_per_day × 6×10⁻¹¹ kWh/byte  (Aslan et al. 2018, 0.06 kWh/GB fixed-line)
 import { Field } from '../types';
 
 /**
@@ -119,11 +115,7 @@ export function scoreWaste(field: Field, endpointPattern?: string): number {
   return bytes * requests;
 }
 
-// CO₂ estimate for UI display.
-// Uses Aslan et al. (2018): 0.06 kWh/GB for fixed-line network transmission.
-// 0.06 kWh/GB = 6×10⁻¹¹ kWh/byte
-// For a more conservative full-stack estimate use 0.14 kWh/GB (Sustainable Web Design, 2024)
-// = 1.4×10⁻¹⁰ kWh/byte
+// Aslan et al. (2018): 0.06 kWh/GB for fixed-line networks = 6×10⁻¹¹ kWh/byte
 export const KWH_PER_BYTE = 6e-11; // Aslan 2018, fixed-line
 
 export function estimateCO2kWh(wastedBytesPerDay: number): number {

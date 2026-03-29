@@ -1,4 +1,3 @@
-// Person D — Diff Engine + Sustainability Scorer
 import { FieldSet } from '../types';
 import { computeDiff } from './differ';
 import { scoreWaste } from './scorer';

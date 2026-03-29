@@ -1,5 +1,5 @@
 /**
- * Unit tests — Person D's Diff Engine + Sustainability Scorer
+ * Unit tests — Diff Engine + Sustainability Scorer
  *
  * Covers: computeDiff, scoreWaste, estimateFieldBytes, estimateDailyRequests,
  *         estimateCO2kWh, runDiff
