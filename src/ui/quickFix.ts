@@ -1,5 +1,3 @@
-// Person E — Quick Fix / Code Action
-// Suggests removing dead field definitions
 import * as vscode from 'vscode';
 import { GreenFieldDiagnosticProvider } from './diagnosticProvider';
 

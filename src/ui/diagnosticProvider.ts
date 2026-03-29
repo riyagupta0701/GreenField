@@ -5,7 +5,6 @@ function getFieldLocation(field: Field): { uri: vscode.Uri, range: vscode.Range 
   if (!field.definedAt) return null;
 
   if (typeof field.definedAt === 'string') {
-    // definedAt is a string like "path/to/file:line"
     const lastColonIdx = field.definedAt.lastIndexOf(':');
     if (lastColonIdx === -1) return null;
 
@@ -121,7 +120,6 @@ export class GreenFieldDiagnosticProvider {
     return undefined;
   }
 
-  // Document version awareness (Anti-drift)
   handleDocumentChange(event: vscode.TextDocumentChangeEvent): void {
     // Only wipe out the diagnostics for this specific file if there is an actual text change.
     // Make sure we use the same URI serialization string we use when setting the Map

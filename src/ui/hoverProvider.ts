@@ -1,4 +1,3 @@
-// Shows: "lastLoginIp — never accessed by frontend. ~24 bytes/req wasted"
 import * as vscode from 'vscode';
 import { GreenFieldDiagnosticProvider } from './diagnosticProvider';
 
