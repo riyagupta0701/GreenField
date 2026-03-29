@@ -116,28 +116,28 @@ The CO₂/day estimate uses the 0.000000006 kWh/byte coefficient from Aslan et a
 
 Tasks are designed to be independently developable against shared interfaces defined in Week 1.
 
-### Person A — Extension Shell + Endpoint Mapper
+### Extension Shell + Endpoint Mapper
 - VS Code extension scaffolding (`package.json`, activation, commands)
 - Endpoint mapping logic: frontend API call detection + backend route detection
 - URL normalization and canonical endpoint registry
 - Integration glue between all components
 
-### Person B — TypeScript AST Parser
+### TypeScript AST Parser
 - Field extraction from frontend request bodies (fetch, axios, form objects)
 - Usage tracking in frontend: destructuring, JSX, optional chaining, template literals
 - Uses `ts-morph` for full TS compiler API access
 
-### Person C — Python + Java AST Parser
+### Python + Java AST Parser
 - Field extraction from Flask/FastAPI/Spring response objects and DTOs
 - Usage tracking in backend request handlers (Pydantic, `request.json`, Spring binding)
 - Uses `tree-sitter` bindings for both languages
 
-### Person D — Diff Engine + Sustainability Scorer
+### Diff Engine + Sustainability Scorer
 - Implements the diff between defined and accessed fields
 - Waste scoring (bytes/request, CO₂/day estimate)
 - Benchmark suite construction for RQ1 evaluation
 
-### Person E — VS Code UI + Evaluation
+### VS Code UI + Evaluation
 - Diagnostic provider (inline squiggles, hover tooltips, quick fixes)
 - GreenField panel (per-endpoint breakdown, waste summary)
 - Status bar indicator
@@ -145,7 +145,7 @@ Tasks are designed to be independently developable against shared interfaces def
 
 ---
 
-## Shared Interface (defined Week 1, owned by Person A)
+## Shared Interface
 
 ```typescript
 interface Endpoint {

@@ -1,4 +1,3 @@
-// Person C — Python backend usage tracking
 // Tracks request field access: request.json.get(), data['field'], Pydantic binding
 // Uses regex (same approach as backendDetector.ts) — no tree-sitter dependency
 

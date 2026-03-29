@@ -105,7 +105,7 @@ describe('Integration — Dead field detection (inline diff)', () => {
   /**
    * We simulate the pipeline:
    *   1. Backend defines response fields in res.json({...})
-   *      We hand-build these as Field objects (since Person C owns backend extraction).
+   *      We hand-build these as Field objects (backend extraction not used in this test).
    *   2. Frontend accesses a subset → tracked by usageTracker.
    *   3. Diff reveals the dead fields.
    */

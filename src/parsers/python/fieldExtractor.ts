@@ -1,4 +1,3 @@
-// Person C — Python backend field extraction
 // Extracts fields from Flask/FastAPI response objects and Pydantic models
 // Uses regex (same approach as backendDetector.ts) — no tree-sitter dependency
 

@@ -5,7 +5,7 @@
  * computes precision and recall per project and overall.
  *
  * Usage:
- *   npx ts-node evaluation/rq1/run.ts
+ *   npx ts-node evaluation/run.ts
  */
 
 import * as fs from 'fs';
@@ -61,7 +61,7 @@ function filesIn(dir: string, ext: string): string[] {
  *    accessed = Java trackUsage on backend .java files  (what backend reads)
  *
  *  TS backend (projects 01–15):
- *    Person B's TS extractor handles frontend request bodies, not backend res.json().
+ *    The TS extractor handles frontend request bodies, not backend res.json().
  *    Falls back to fields.json (gitignored local stub) until a TS backend
  *    response extractor is implemented.
  */
