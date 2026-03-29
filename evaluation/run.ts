@@ -10,12 +10,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { computeDiff } from '../../src/diffEngine/differ';
-import { Field } from '../../src/types';
-import { extractFields as tsExtractFields } from '../../src/parsers/typescript/fieldExtractor';
-import { trackUsage   as tsTrackUsage   } from '../../src/parsers/typescript/usageTracker';
-import { extractFields as pyExtractFields } from '../../src/parsers/python/fieldExtractor';
-import { trackUsage   as javaTrackUsage } from '../../src/parsers/java/usageTracker';
+import { computeDiff } from '../src/diffEngine/differ';
+import { Field } from '../src/types';
+import { extractFields as tsExtractFields } from '../src/parsers/typescript/fieldExtractor';
+import { trackUsage   as tsTrackUsage   } from '../src/parsers/typescript/usageTracker';
+import { extractFields as pyExtractFields } from '../src/parsers/python/fieldExtractor';
+import { trackUsage   as javaTrackUsage } from '../src/parsers/java/usageTracker';
 
 const BENCHMARKS_DIR = path.resolve(__dirname, '../../test/benchmarks/synthetic');
 
