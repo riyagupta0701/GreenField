@@ -22,8 +22,8 @@ export class GreenFieldHoverProvider implements vscode.HoverProvider {
       
       markdown.appendMarkdown(`---\n`);
       markdown.appendMarkdown(`**🔋 Sustainability Impact**\n\n`);
-      markdown.appendMarkdown(`* **Waste:** ~${field.wasteScore.toFixed(2)} bytes/req\n`);
-      markdown.appendMarkdown(`* **Est. energy use/day:** ~${energyEstimate} kWh based on Aslan et al. (2018)\n\n`);
+      const wasteWithCommas = field.wasteScore.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      markdown.appendMarkdown(`* **Waste:** ~${wasteWithCommas} bytes/day\n`);
       markdown.appendMarkdown(`Removing this field saves serialisation overhead and reduces network payload.`);
       
       return new vscode.Hover(markdown);

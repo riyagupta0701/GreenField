@@ -134,12 +134,10 @@ export class GreenFieldPanel {
         totalWaste += df.wasteScore;
         let fileUri = '';
         let startLine = 0;
-        
         if (typeof df.definedAt === 'string') {
           const lastColonIdx = df.definedAt.lastIndexOf(':');
           if (lastColonIdx !== -1) {
             fileUri = vscode.Uri.file(df.definedAt.substring(0, lastColonIdx)).toString();
-            // Line is 1-indexed in the string, 0-indexed for VS Code jump
             startLine = Math.max(0, parseInt(df.definedAt.substring(lastColonIdx + 1), 10) - 1) || 0;
           } else {
             fileUri = vscode.Uri.file(df.definedAt).toString();
@@ -148,17 +146,23 @@ export class GreenFieldPanel {
           fileUri = df.definedAt.uri.toString();
           startLine = df.definedAt.range.startLine;
         }
-        
-        const safePattern = this.escapeHtml(fs.endpoint?.pattern || 'Unknown Endpoint');
-        const safeMethod = this.escapeHtml(fs.endpoint?.method || 'N/A');
+        // Extract file name from URI
+        let fileName = '';
+        try {
+          const path = vscode.Uri.parse(fileUri).fsPath;
+          fileName = path.split(/[\\/]/).pop() || path;
+        } catch {
+          fileName = fileUri;
+        }
         const safeName = this.escapeHtml(df.name);
         const safeUri = this.escapeHtml(fileUri);
-        
+        const safeFileName = this.escapeHtml(fileName);
+        const wasteScoreWithCommas = formatWithCommas(df.wasteScore);
         return `
           <tr>
-            <td><code>${safePattern}</code> <span class="badge ${safeMethod.toLowerCase()}">${safeMethod}</span></td>
+            <td><code>${safeFileName}</code></td>
             <td><code>${safeName}</code></td>
-            <td class="waste-score">${df.wasteScore} bytes</td>
+            <td class="waste-score">${wasteScoreWithCommas} bytes</td>
             <td>
               <button class="reveal-btn" data-uri="${safeUri}" data-line="${startLine}">
                 Jump to file
@@ -176,7 +180,6 @@ export class GreenFieldPanel {
         totalWaste += df.wasteScore || 0;
         let fileUri = '';
         let startLine = 0;
-        
         if (typeof df.definedAt === 'string') {
           const lastColonIdx = df.definedAt.lastIndexOf(':');
           if (lastColonIdx !== -1) {
@@ -189,17 +192,23 @@ export class GreenFieldPanel {
           fileUri = df.definedAt.uri.toString();
           startLine = df.definedAt.range.startLine;
         }
-
-        const safePattern = this.escapeHtml('Global Analysis (No Endpoint Match)');
-        const safeMethod = 'UNMAPPED';
+        // Extract file name from URI
+        let fileName = '';
+        try {
+          const path = vscode.Uri.parse(fileUri).fsPath;
+          fileName = path.split(/[\\/]/).pop() || path;
+        } catch {
+          fileName = fileUri;
+        }
         const safeName = this.escapeHtml(df.name);
         const safeUri = this.escapeHtml(fileUri);
-        
+        const safeFileName = this.escapeHtml(fileName);
+        const wasteScoreWithCommas = formatWithCommas(df.wasteScore || 0);
         return `
           <tr>
-            <td><code>${safePattern}</code> <span class="badge" style="background:#555;color:#fff;">${safeMethod}</span></td>
+            <td><code>${safeFileName}</code></td>
             <td><code>${safeName}</code></td>
-            <td class="waste-score">${df.wasteScore || 0} bytes</td>
+            <td class="waste-score">${wasteScoreWithCommas} bytes</td>
             <td>
               <button class="reveal-btn" data-uri="${safeUri}" data-line="${startLine}">
                 Jump to file
@@ -217,7 +226,8 @@ export class GreenFieldPanel {
     const CO2_PER_BYTE = 0.00000006916;
     const co2Estimate = (totalWaste * CO2_PER_BYTE).toFixed(6); // 6 decimals for reasonable precision
     // Format for display
-    const totalWasteWithCommas = formatWithCommas(totalWaste);
+    const totalWasteKB = totalWaste / 1000;
+    const totalWasteKBWithCommas = formatWithCommas(Math.round(totalWasteKB));
     const totalWasteInWords = numberToWords(totalWaste);
     // Carbon: show as grams CO2e per day, rounded, with label
     const co2EstimateRounded = Number(co2Estimate).toLocaleString(undefined, { maximumFractionDigits: 3 });
@@ -236,7 +246,7 @@ export class GreenFieldPanel {
           <meta charset="UTF-8">
           <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>GreenField Report</title>
+          <title>GreenField Dashboard</title>
           <style>
               body {
                   font-family: var(--vscode-font-family);
@@ -294,13 +304,13 @@ export class GreenFieldPanel {
           </style>
       </head>
       <body>
-          <h1>🌱 Sustainable Software Engineering Dashboard</h1>
+          <h1>GreenField Dashboard</h1>
           
 
             <div class="summary-cards">
               <div class="card">
                 <h3>Total Network Waste</h3>
-                <p class="value">${totalWasteWithCommas} B</p>
+                <p class="value">${totalWasteKBWithCommas} KB</p>
                 <p style="font-size: 13px; color: #aaa; margin: 0;">(${totalWasteInWords})</p>
                 <p style="font-size: 12px; margin-top: 5px;">Dead JSON payload capacity per day</p>
               </div>
@@ -311,20 +321,20 @@ export class GreenFieldPanel {
               </div>
             </div>
 
-          <h2>Dead Field Ledger</h2>
-          <table>
+            <h2>Dead Field Ledger</h2>
+            <table>
               <thead>
-                  <tr>
-                      <th>Endpoint</th>
-                      <th>Dead Field Name</th>
-                      <th>Waste Score</th>
-                      <th>Action</th>
-                  </tr>
+                <tr>
+                  <th>File Name</th>
+                  <th>Dead Field Name</th>
+                  <th>Waste Score (per day)</th>
+                  <th>Action</th>
+                </tr>
               </thead>
               <tbody>
-                  ${emptyState}
+                ${emptyState}
               </tbody>
-          </table>
+            </table>
 
           <script nonce="${nonce}">
               const vscode = acquireVsCodeApi();
