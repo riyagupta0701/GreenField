@@ -161,23 +161,24 @@ Each project has a backend file (TS, Python, Java, or Go), a frontend TS file, a
 
 | Metric | Value |
 |--------|-------|
-| Files scanned | 4,161 TS / 1,971 Go |
-| Endpoints mapped | 455 |
-| Go dead response fields | 4,219 / 8,343 (51%) |
-| Est. wasted bytes/request | ~101,256 bytes |
-| Est. CO₂ waste @10k req/d | ~6,075 Wh/day |
+| Files scanned | 4,796 TS / 1,962 Go |
+| Endpoints mapped | 457 |
+| Dead fields | 4,178 / 8,344 (~50%) |
+| Est. wasted bytes/day | ~1.22 GB |
+| Est. CO₂ waste | ~73.1 Wh/day |
+| Analysis mode | Global fallback |
 
 > Mattermost uses a two-level sub-router pattern that prevents full URL reconstruction from a single file, so per-endpoint analysis is unavailable. Results use the global fallback (all Go response fields vs all frontend-accessed names).
 
-**freeCodeCamp** (TypeScript):
+**freeCodeCamp** (TypeScript / Node.js):
 
 | Metric | Value |
 |--------|-------|
-| Files scanned | 921 (TS) |
+| Files scanned | 1,085 TS |
 | Endpoints mapped | 7 |
-| TS dead response fields | 3/12 (25%) |
-| Est. wasted bytes/request | ~72 bytes |
-| Est. CO₂ waste @10k req/d | ~4.32 Wh/day |
-> The analysis mode used for freeCodeCamp was per-endpoint.
+| Dead fields | 16 / 16 (100%) |
+| Est. wasted bytes/day | ~3,520 KB |
+| Est. CO₂ waste | ~0.21 Wh/day |
+| Analysis mode | Global fallback |
 
 ---
