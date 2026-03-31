@@ -136,22 +136,33 @@ export function activate(context: vscode.ExtensionContext) {
                .map(f => f.name)
       );
 
-      function globalDeadFields(extractFn: (p: string, ...args: any[]) => import('./types').Field[], langFiles: vscode.Uri[]) {
-        return langFiles.flatMap(f => {
+      function globalAnalysisForLang(extractFn: (p: string, ...args: any[]) => import('./types').Field[], langFiles: vscode.Uri[]): { dead: import('./types').Field[], total: number } {
+        let total = 0;
+        const dead = langFiles.flatMap(f => {
           try {
-            return extractFn(f.fsPath)
-              .filter(field => field.side === 'response' && !allAccessedNames.has(field.name))
+            const all = extractFn(f.fsPath).filter(field => field.side === 'response');
+            total += all.length;
+            return all
+              .filter(field => !allAccessedNames.has(field.name))
               .map(field => ({ ...field, wasteScore: scoreWaste(field) }));
           }
           catch { return []; }
         });
+        return { dead, total };
       }
 
+      const rawGlobal = {
+        go:   globalAnalysisForLang(goExtractFields,        goFiles),
+        py:   globalAnalysisForLang(pyExtractFields,        pyFiles),
+        java: globalAnalysisForLang(javaExtractFields,      javaFiles),
+        ts:   globalAnalysisForLang(tsExtractBackendFields, tsFiles),
+      };
+
       const globalAnalysis = {
-        go:   globalDeadFields(goExtractFields,   goFiles),
-        py:   globalDeadFields(pyExtractFields,   pyFiles),
-        java: globalDeadFields(javaExtractFields, javaFiles),
-        ts:   globalDeadFields(tsExtractBackendFields, tsFiles),
+        go:   rawGlobal.go.dead,
+        py:   rawGlobal.py.dead,
+        java: rawGlobal.java.dead,
+        ts:   rawGlobal.ts.dead,
       };
 
       const totalGlobalDead = Object.values(globalAnalysis).reduce((n, arr) => n + arr.length, 0);
@@ -160,6 +171,10 @@ export function activate(context: vscode.ExtensionContext) {
       const totalDead = fieldSets.reduce((n, fs) => n + (fs.deadFields?.length ?? 0), 0) + totalGlobalDead;
       const totalWasteBytes = fieldSets.reduce((n, fs) =>
         n + (fs.deadFields?.reduce((s, f) => s + (f.wasteScore ?? 0), 0) ?? 0), 0) + totalGlobalWasteBytes;
+
+      const totalResponseFields =
+        fieldSets.reduce((n, fs) => n + (fs.definedFields?.length ?? 0), 0) +
+        Object.values(rawGlobal).reduce((n, r) => n + r.total, 0);
 
       const langCounts: { lang: string; files: number }[] = [
         { lang: 'TS',   files: tsFiles.length   },
@@ -174,7 +189,7 @@ export function activate(context: vscode.ExtensionContext) {
       diagnosticProvider.update(fieldSets, globalAnalysis);
 
       const kb = (totalWasteBytes / 1000).toFixed(1);
-      status.text = `⚡ GreenField: ${endpoints.length} endpoints | ${totalDead} dead fields | ~${kb} KB/req wasted`;
+      status.text = `⚡ GreenField: ${endpoints.length} endpoints | ${totalDead} / ${totalResponseFields} dead fields | ~${kb} KB/req wasted`;
 
       // If we are doing a silent background scan (e.g. on file save), we don't 
       // want to pop open the Dashboard or JSON document, just update diagnostics and status bar.
