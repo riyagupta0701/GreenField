@@ -48,6 +48,8 @@ npm test              # compiles dist-test/ and runs all unit tests
 
 The extension scans all `.ts/.tsx/.js/.jsx/.py/.java/.go` files, maps API endpoints, extracts field definitions and usages, and reports dead fields as inline diagnostics.
 
+For scanning a project without VS Code, use the standalone CLI: `node scripts/scan.js <path-to-project>`. It runs the same analysis pipeline and prints a structured summary of endpoints, dead fields, wasted bytes/day, and CO₂ estimate.
+
 ---
 
 ## Development
