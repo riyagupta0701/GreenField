@@ -114,11 +114,11 @@ VS Code Diagnostics   — inline squiggles, hover messages, status bar summary
 
 ## Waste scoring:
 
-$$N_{\text{dead\_fields}} = \text{Defined}(\text{backend response}) - \text{Accessed}(\text{frontend})$$
+$$N_{\text{dead fields}} = \text{Defined}(\text{backend response}) - \text{Accessed}(\text{frontend})$$
 
-$$\text{waste\_score} = N_{\text{dead\_fields}} \times \hat{b} \times R$$
+$$\text{waste score} = N_{\text{dead fields}} \times \hat{b} \times R$$
 
-$$\text{CO}_2\text{/day} = \text{waste\_score} \times \gamma$$
+$$\text{CO}_2/\text{day} = \text{waste score} \times \gamma$$
 
 where $\hat{b}$ is the estimated bytes per field (heuristic, 5–80 bytes based on field name), $R$ is the estimated daily request volume (tiered by endpoint pattern), and $\gamma = 6.9 \times 10^{-8}\ \text{gCO}_2\text{e/byte}$ is the carbon intensity of data transfer (Aslan et al. 2018, fixed-line networks, excluding user devices).
 
